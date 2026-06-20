@@ -1,9 +1,9 @@
-package myagent
+package main
 
 import (
 	"log"
-	"myagent/agent"
-	"myagent/config"
+	"myagent/internal/agent"
+	"myagent/internal/config"
 	"os"
 )
 
@@ -18,8 +18,7 @@ func main() {
 		Config: cfg,
 	}
 
-	err = a.AgentLoop(os.Stdin, os.Stdout)
-	if err != nil {
+	if a.Run(os.Stdin, os.Stdout) != nil {
 		log.Fatalf("%v", err)
 	}
 }

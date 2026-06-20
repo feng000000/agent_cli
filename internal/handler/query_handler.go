@@ -17,7 +17,6 @@ func HandleQuery(ctx *runtime.LoopContext) error {
 		fmt.Printf("\tmessage: %+v\n", message)
 	}
 
-	// NOTICE: mock 工具调用: 直接修改 ctx, 然后不返回响应
 	messages := []llm.Message{llm.UserMessage(ctx.Query)}
 
 	timeoutCtx, cancel := context.WithTimeout(

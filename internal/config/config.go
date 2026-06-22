@@ -12,11 +12,14 @@ type WorkspaceConfig struct {
 }
 
 type AgentConfig struct {
+	LogPath string `json:"log_path"`
+
 	Workspace WorkspaceConfig `json:"workspace"`
 }
 
 func defaultAgentConfig() AgentConfig {
 	return AgentConfig{
+		LogPath: "",
 		Workspace: WorkspaceConfig{
 			WorkspaceDir: "./workspace",
 			MemoryPath:   "./workspace/.memory.md",

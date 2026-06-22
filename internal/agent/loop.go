@@ -1,16 +1,16 @@
 package agent
 
-import (
-	"bytes"
-	"fmt"
-	"io"
-	"myagent/internal/config"
-	"myagent/internal/handler"
-	"myagent/internal/runtime"
-	"myagent/internal/tools"
-	"myagent/pkg/llm"
-	"strings"
-)
+import "bytes"
+import "fmt"
+import "io"
+import "strings"
+
+import "myagent/internal/config"
+import "myagent/internal/handler"
+import "myagent/internal/runtime"
+import "myagent/internal/tools"
+import "myagent/pkg/llm"
+import "myagent/pkg/logger"
 
 type Agent struct {
 	Config config.AgentConfig
@@ -55,7 +55,7 @@ func readMessage(r io.Reader, ch chan string) {
 		}
 
 		if err != nil {
-			fmt.Printf("read input error: %v\n", err)
+			logger.Errorf("read input error: %v\n", err)
 		}
 	}
 }
@@ -85,8 +85,8 @@ func agentLoopCore(input_ch chan string, output chan string) {
 	for {
 		data := <-input_ch
 
-		fmt.Printf("[agentLoopCore] round %v\n", loopRound)
-		fmt.Printf("[agentLoopCore] input data: %v\n", string(data))
+		logger.Debugf("[agentLoopCore] round %v\n", loopRound)
+		logger.Debugf("[agentLoopCore] input data: %v\n", string(data))
 
 		loopContext.Query = string(data)
 		resp, err := agentHandler(&loopContext)
@@ -129,7 +129,7 @@ func agentHandler(ctx *runtime.LoopContext) (*llm.ChatResponse, error) {
 		err = handler.HandleToolCall(ctx)
 	} else {
 		// fmt.Printf("invalid LoopContext: %v\n", ctx)
-		fmt.Printf("invalid LoopContext\n")
+		logger.Errorf("invalid LoopContext\n")
 		return nil, fmt.Errorf("invalid LoopContext")
 	}
 

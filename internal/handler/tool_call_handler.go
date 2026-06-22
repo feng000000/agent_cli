@@ -6,18 +6,19 @@ import "context"
 
 import "myagent/internal/runtime"
 import "myagent/pkg/llm"
+import "myagent/pkg/logger"
 
 func HandleToolCall(ctx *runtime.LoopContext) error {
 	idChanMap := map[llm.ToolCall]chan string{}
 
-	fmt.Printf("HandleToolCall Start >>>>>>>>>>>>>>>>\n")
-	fmt.Println("[HandleToolCall] message (before):")
+	logger.Debugf("HandleToolCall Start >>>>>>>>>>>>>>>>\n")
+	logger.Debugf("[HandleToolCall] message (before):\n")
 	for _, message := range ctx.MessageParams {
-		fmt.Printf("\tmessage: %+v\n", message)
+		logger.Debugf("\tmessage: %+v\n", message)
 	}
 
 	for _, tc := range ctx.Response.ToolCalls() {
-		fmt.Printf("exec tool: %v\n", tc.Function.Name)
+		logger.Infof("exec tool: %v\n", tc.Function.Name)
 		resCh := make(chan string)
 		idChanMap[tc] = resCh
 
@@ -69,14 +70,14 @@ func HandleToolCall(ctx *runtime.LoopContext) error {
 	}
 
 	// fmt.Printf("[HandleToolCall] result: %v\n", ctx.Response.Content())
-	fmt.Printf("[HandleToolCall] HasToolCall: %v\n", ctx.Response.HasToolCalls())
+	logger.Debugf("[HandleToolCall] HasToolCall: %v\n", ctx.Response.HasToolCalls())
 
 
-	fmt.Println("[HandleToolCall] message (after):")
+	logger.Debugf("[HandleToolCall] message (after):\n")
 	for _, message := range ctx.MessageParams {
-		fmt.Printf("\tmessage: %+v\n", message)
+		logger.Debugf("\tmessage: %+v\n", message)
 	}
-	fmt.Printf("HandleToolCall Done <<<<<<<<<<<<<<<<\n\n")
+	logger.Debugf("HandleToolCall Done <<<<<<<<<<<<<<<<\n\n")
 
 	return nil
 }

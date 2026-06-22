@@ -1,20 +1,20 @@
 package handler
 
 import "context"
-import "fmt"
 import "time"
 
 import "myagent/internal/runtime"
 import "myagent/pkg/llm"
+import "myagent/pkg/logger"
 
 func HandleQuery(ctx *runtime.LoopContext) error {
-	fmt.Println("Handle query")
+	logger.Infof("Handle query")
 
-	fmt.Printf("HandleQuery Start >>>>>>>>>>>>>>>>\n\n")
-	fmt.Printf("[HandleQuery] query: %v\n", ctx.Query)
-	fmt.Println("[HandleQuery] message (before):")
+	logger.Debugf("HandleQuery Start >>>>>>>>>>>>>>>>\n\n")
+	logger.Debugf("[HandleQuery] query: %v\n", ctx.Query)
+	logger.Debugf("[HandleQuery] message (before):")
 	for _, message := range ctx.MessageParams {
-		fmt.Printf("\tmessage: %+v\n", message)
+		logger.Debugf("\tmessage: %+v\n", message)
 	}
 
 	messages := []llm.Message{llm.UserMessage(ctx.Query)}
@@ -35,12 +35,12 @@ func HandleQuery(ctx *runtime.LoopContext) error {
 
 	// DEBUG:
 	if !resp.HasToolCalls() {
-		fmt.Println("[CALL LLM] content:")
-		fmt.Println(resp.Content())
+		logger.Debugf("[CALL LLM] content:\n")
+		logger.Debugf("%v\n", resp.Content())
 	} else {
-		fmt.Println("[CALL LLM] tool calls:")
+		logger.Debugf("[CALL LLM] tool calls:\n")
 		for _, tc := range resp.ToolCalls() {
-			fmt.Printf(
+			logger.Debugf(
 				"\tid: %s\ntype: %s\nfunction: %s\narguments: %s\n",
 				tc.ID,
 				tc.Type,
@@ -63,11 +63,11 @@ func HandleQuery(ctx *runtime.LoopContext) error {
 	}
 
 
-	fmt.Println("[HandleQuery] message (after):")
+	logger.Debugf("[HandleQuery] message (after):\n")
 	for _, message := range ctx.MessageParams {
-		fmt.Printf("\tmessage: %+v\n", message)
+		logger.Debugf("\tmessage: %+v\n", message)
 	}
-	fmt.Printf("HandleQuery Done <<<<<<<<<<<<<<<<\n\n")
+	logger.Debugf("HandleQuery Done <<<<<<<<<<<<<<<<\n\n")
 
 	lastMsg := ctx.MessageParams[len(ctx.MessageParams) - 1]
 	if lastMsg.ReasoningContent != "" {

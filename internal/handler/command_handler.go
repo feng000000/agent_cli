@@ -1,11 +1,11 @@
 package handler
 
-import "fmt"
 import "myagent/internal/runtime"
+import "myagent/pkg/logger"
 
 
 func HandleCommand(ctx *runtime.LoopContext) error {
 	// TODO: implement
-	fmt.Printf("got command: %v (not implemented)\n", ctx.Query)
+	logger.Errorf("got command: %v (not implemented)\n", ctx.Query)
 	return nil
 }

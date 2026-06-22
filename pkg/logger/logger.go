@@ -9,13 +9,6 @@ import (
 	"go.uber.org/zap/zapcore"
 )
 
-type LogType int
-
-const (
-	JSON    LogType = 0
-	CONSOLE LogType = 1
-)
-
 var (
 	logger      *zap.Logger = nil
 	LogLevelMap             = map[string]zapcore.Level{

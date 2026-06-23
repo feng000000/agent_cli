@@ -4,6 +4,8 @@ import "myagent/internal/tools"
 import "myagent/pkg/llm"
 
 type LoopContext struct {
+	// InputChan 可以直接追加信息
+	InputChan chan string
 	// OutputChan 可以直接输出临时信息
 	OutputChan chan string
 	LLMClient  llm.LLMClient

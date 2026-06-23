@@ -24,7 +24,7 @@ func main() {
 		Config: cfg,
 	}
 
-	if a.Run(os.Stdin, os.Stdout) != nil {
+	if a.Exec(os.Stdin, os.Stdout) != nil {
 		log.Fatalf("%v", err)
 	}
 }

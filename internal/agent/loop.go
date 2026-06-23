@@ -16,14 +16,16 @@ type Agent struct {
 	Config config.AgentConfig
 }
 
-func (a *Agent) Run(input io.Reader, output io.Writer) error {
+func (a *Agent) Exec(input io.Reader, output io.Writer) error {
 	ich := make(chan string)
 	och := make(chan string)
 	go readMessage(input, ich)
-	go agentLoopCore(ich, och)
 
 	for {
 		fmt.Fprint(output, "User>")
+
+		query := <- ich
+		go runAgent(query, ich, och)
 
 		// TODO: och 中数据结构需要更复杂, 区分 思考/工具输出/中间输出/最终输出
 		content := <-och
@@ -60,46 +62,38 @@ func readMessage(r io.Reader, ch chan string) {
 	}
 }
 
-func RegisterTools() map[string]tools.Tool {
-	list_dir := &tools.ListDirTool{}
-
-	return map[string]tools.Tool{
-		list_dir.Name(): list_dir,
-	}
-}
-
-// TODO: channel 往返结构体需要更多信息
-func agentLoopCore(input_ch chan string, output chan string) {
+// runAgent 执行一次 agent 流程
+func runAgent(query string, input chan string, output chan string) {
 	llmClient, err := llm.NewDeepSeekClient(llm.DeepSeekConfig{})
 	if err != nil {
 		panic(err)
 	}
 	loopContext := runtime.LoopContext{
+		Query: query,
+		InputChan: input,
 		OutputChan: output,
 		LLMClient:  llmClient,
-		ToolMap:    RegisterTools(),
+		ToolMap:    registerTools(),
 	}
 
-	loopRound := 1
+	logger.Debugf("[agentLoopCore] query: %v\n", query)
 
-	for {
-		data := <-input_ch
+	resp, err := agentHandler(&loopContext)
 
-		logger.Debugf("[agentLoopCore] round %v\n", loopRound)
-		logger.Debugf("[agentLoopCore] input data: %v\n", string(data))
-
-		loopContext.Query = string(data)
-		resp, err := agentHandler(&loopContext)
-
-		loopRound += 1
-
-		if err != nil {
-			output <- fmt.Sprintf("execute agent loop failed: %v", err)
-		} else {
-			output <- resp.Content()
-		}
+	if err != nil {
+		output <- fmt.Sprintf("execute agent loop failed: %v", err)
+	} else {
+		output <- resp.Content()
 	}
+}
 
+// registerTools 返回所有工具的注册表
+func registerTools() map[string]tools.Tool {
+	list_dir := &tools.ListDirTool{}
+
+	return map[string]tools.Tool{
+		list_dir.Name(): list_dir,
+	}
 }
 
 // TODO: implement
@@ -139,6 +133,7 @@ func agentHandler(ctx *runtime.LoopContext) (*llm.ChatResponse, error) {
 		return nil, err
 	}
 
+	// TODO: append query from ctx.InputChan
 
 	if ctx.Response != nil &&
 		!ctx.Response.HasToolCalls() &&

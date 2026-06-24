@@ -1,16 +1,18 @@
 package agent
 
-import "bytes"
-import "fmt"
-import "io"
-import "strings"
+import (
+	"bytes"
+	"fmt"
+	"io"
+	"strings"
 
-import "myagent/internal/config"
-import "myagent/internal/handler"
-import "myagent/internal/runtime"
-import "myagent/internal/tools"
-import "myagent/pkg/llm"
-import "myagent/pkg/logger"
+	"myagent/internal/config"
+	"myagent/internal/handler"
+	"myagent/internal/runtime"
+	"myagent/internal/tool"
+	"myagent/pkg/llm"
+	"myagent/pkg/logger"
+)
 
 type Agent struct {
 	Config config.AgentConfig
@@ -18,19 +20,27 @@ type Agent struct {
 
 func (a *Agent) Exec(input io.Reader, output io.Writer) error {
 	ich := make(chan string)
-	och := make(chan string)
+	och := make(chan runtime.AgentResponse)
 	go readMessage(input, ich)
 
 	for {
 		fmt.Fprint(output, "User>")
 
-		query := <- ich
-		go runAgent(query, ich, och)
+		query := <-ich
+		go a.runAgent(query, ich, och)
 
-		// TODO: och 中数据结构需要更复杂, 区分 思考/工具输出/中间输出/最终输出
 		content := <-och
 
-		fmt.Fprintf(output, "Agent>%s\n", content)
+		switch content.RespType {
+		case runtime.AgentRespTypeLLM:
+			fmt.Fprintf(output, "Agent>%s\n", content.LLMResponse.Content())
+		case runtime.AgentRespTypeError:
+			fmt.Fprintf(output, ">>>!Error: %s\n", content.Err.Error())
+		case runtime.AgentRespTypeMiddleMsg:
+			fmt.Fprintf(output, "| > %s\n", content.MiddleMessage)
+		case runtime.AgentRespTypeCMD:
+			fmt.Fprintf(output, "|| tools exec result: %s\n", content.CMDResult)
+		}
 	}
 
 }
@@ -63,14 +73,25 @@ func readMessage(r io.Reader, ch chan string) {
 }
 
 // runAgent 执行一次 agent 流程
-func runAgent(query string, input chan string, output chan string) {
-	llmClient, err := llm.NewDeepSeekClient(llm.DeepSeekConfig{})
+func (a *Agent) runAgent(query string, input chan string, output chan runtime.AgentResponse) {
+	llmClient, err := llm.NewDeepSeekClient(
+		llm.DeepSeekConfig{
+			APIKey: a.Config.LLM.APIKey,
+			BaseURL: a.Config.LLM.BaseURL,
+			Model: a.Config.LLM.Model,
+		},
+	)
 	if err != nil {
 		panic(err)
 	}
 	loopContext := runtime.LoopContext{
-		Query: query,
-		InputChan: input,
+		AgentConfig: runtime.AgentConfig{
+			AgentMode:   runtime.AgentModePlan,
+			ToolAskMode: runtime.ToolAskModeAuto,
+		},
+
+		UserQuery:  query,
+		InputChan:  input,
 		OutputChan: output,
 		LLMClient:  llmClient,
 		ToolMap:    registerTools(),
@@ -81,17 +102,20 @@ func runAgent(query string, input chan string, output chan string) {
 	resp, err := agentHandler(&loopContext)
 
 	if err != nil {
-		output <- fmt.Sprintf("execute agent loop failed: %v", err)
+		output <- runtime.AgentResponse{
+			RespType: runtime.AgentRespTypeMiddleMsg,
+			Err: fmt.Errorf("execute agent loop failed: %v", err),
+		}
 	} else {
-		output <- resp.Content()
+		output <- *resp
 	}
 }
 
 // registerTools 返回所有工具的注册表
-func registerTools() map[string]tools.Tool {
-	list_dir := &tools.ListDirTool{}
+func registerTools() map[string]tool.Tool {
+	list_dir := &tool.ListDirTool{}
 
-	return map[string]tools.Tool{
+	return map[string]tool.Tool{
 		list_dir.Name(): list_dir,
 	}
 }
@@ -112,12 +136,20 @@ func registerTools() map[string]tools.Tool {
 //   - response:
 //
 // - update history, memory
-func agentHandler(ctx *runtime.LoopContext) (*llm.ChatResponse, error) {
+func agentHandler(ctx *runtime.LoopContext) (*runtime.AgentResponse, error) {
 	var err error
 
-	if strings.HasPrefix(ctx.Query, "/") { // command
-		err = handler.HandleCommand(ctx)
-	} else if ctx.Query != "" { // normal query
+	if strings.HasPrefix(ctx.UserQuery, "/") { // command
+		res, err := handler.HandleCommand(ctx)
+		if err != nil {
+			return nil, err
+		}
+		return &runtime.AgentResponse{
+			RespType:    runtime.AgentRespTypeCMD,
+			CMDResult: res,
+		}, nil
+
+	} else if ctx.UserQuery != "" { // normal query
 		err = handler.HandleQuery(ctx)
 	} else if ctx.Response.HasToolCalls() { // tool call
 		err = handler.HandleToolCall(ctx)
@@ -138,7 +170,10 @@ func agentHandler(ctx *runtime.LoopContext) (*llm.ChatResponse, error) {
 	if ctx.Response != nil &&
 		!ctx.Response.HasToolCalls() &&
 		ctx.Response.Content() != "" {
-		return ctx.Response, nil
+		return &runtime.AgentResponse{
+			RespType:    runtime.AgentRespTypeLLM,
+			LLMResponse: ctx.Response,
+		}, nil
 	}
 
 	return agentHandler(ctx)

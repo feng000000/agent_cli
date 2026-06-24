@@ -117,7 +117,7 @@ func InitLogger(level string, logFilePath string) error {
 	logger = zap.New(
 		core,
 		zap.AddCaller(),
-		zap.AddStacktrace(logLevel),
+		zap.AddStacktrace(zapcore.ErrorLevel),
 		zap.AddCallerSkip(1),
 	)
 

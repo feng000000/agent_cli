@@ -1,4 +1,4 @@
-package tools
+package tool
 
 import "myagent/pkg/llm"
 

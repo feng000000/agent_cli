@@ -4,6 +4,12 @@ import "os"
 import "fmt"
 import "encoding/json"
 
+type LLMConfig struct {
+	BaseURL string `json:"base_url"`
+	Model   string `json:"model"`
+	APIKey  string `json:"api_key"`
+}
+
 type WorkspaceConfig struct {
 	WorkspaceDir string `json:"workspace_dir"`
 	MemoryPath   string `json:"memory_path"`
@@ -14,6 +20,7 @@ type WorkspaceConfig struct {
 type AgentConfig struct {
 	LogPath string `json:"log_path"`
 
+	LLM       LLMConfig       `json:"llm"`
 	Workspace WorkspaceConfig `json:"workspace"`
 }
 

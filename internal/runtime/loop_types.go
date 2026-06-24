@@ -1,19 +1,41 @@
 package runtime
 
-import "myagent/internal/tools"
+import "myagent/internal/tool"
 import "myagent/pkg/llm"
 
+type AgentMode string
+
+const (
+	AgentModePlan     AgentMode = "plan"
+	AgentModeAutoEdit AgentMode = "auto-edit"
+)
+
+type ToolAskMode string
+
+const (
+	ToolAskModeAuto   ToolAskMode = "auto"   // 自动批准，不询问
+	ToolAskModeAlways ToolAskMode = "always" // 每次都询问
+	ToolAskModeNone   ToolAskMode = "none"   // 拒绝所有工具调用
+)
+
+type AgentConfig struct {
+	AgentMode AgentMode
+	ToolAskMode ToolAskMode
+}
+
 type LoopContext struct {
+	AgentConfig AgentConfig
+
 	// InputChan 可以直接追加信息
 	InputChan chan string
 	// OutputChan 可以直接输出临时信息
-	OutputChan chan string
+	OutputChan chan AgentResponse
 	LLMClient  llm.LLMClient
 
-	Query string
+	UserQuery string
 
 	MessageParams []llm.Message
-	ToolMap		map[string]tools.Tool
+	ToolMap       map[string]tool.Tool
 
 	Response *llm.ChatResponse
 }
@@ -26,7 +48,20 @@ func (lc *LoopContext) ToolList() []llm.Tool {
 	return toolList
 }
 
-// type LoopResponse struct {
-// 	Answer   string
-// 	ToolCall []llm.ToolCall
-// }
+
+type ResponseType string
+const (
+	AgentRespTypeCMD = "command"
+	AgentRespTypeLLM = "llm_response"
+	AgentRespTypeError = "error"
+	AgentRespTypeMiddleMsg = "middle_message"
+)
+
+type AgentResponse struct {
+	RespType ResponseType
+
+	CMDResult string
+	LLMResponse *llm.ChatResponse
+	Err error
+	MiddleMessage string
+}

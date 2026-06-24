@@ -11,13 +11,13 @@ func HandleQuery(ctx *runtime.LoopContext) error {
 	logger.Infof("Handle query")
 
 	logger.Debugf("HandleQuery Start >>>>>>>>>>>>>>>>\n\n")
-	logger.Debugf("[HandleQuery] query: %v\n", ctx.Query)
+	logger.Debugf("[HandleQuery] query: %v\n", ctx.UserQuery)
 	logger.Debugf("[HandleQuery] message (before):")
 	for _, message := range ctx.MessageParams {
 		logger.Debugf("\tmessage: %+v\n", message)
 	}
 
-	messages := []llm.Message{llm.UserMessage(ctx.Query)}
+	messages := []llm.Message{llm.UserMessage(ctx.UserQuery)}
 
 	timeoutCtx, cancel := context.WithTimeout(
 		context.Background(), 60*time.Second,
@@ -54,7 +54,7 @@ func HandleQuery(ctx *runtime.LoopContext) error {
 		return err
 	}
 
-	ctx.Query = ""
+	ctx.UserQuery = ""
 	ctx.Response = resp
 
 	assistantMsg, ok := resp.Message()
@@ -71,7 +71,10 @@ func HandleQuery(ctx *runtime.LoopContext) error {
 
 	lastMsg := ctx.MessageParams[len(ctx.MessageParams) - 1]
 	if lastMsg.ReasoningContent != "" {
-		ctx.OutputChan <- lastMsg.ReasoningContent
+		ctx.OutputChan <- runtime.AgentResponse{
+			RespType: runtime.AgentRespTypeMiddleMsg,
+			MiddleMessage: lastMsg.ReasoningContent,
+		}
 	}
 
 	return nil

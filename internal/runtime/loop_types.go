@@ -23,6 +23,7 @@ type AgentConfig struct {
 	ToolAskMode ToolAskMode
 }
 
+// TODO: Usage
 type LoopContext struct {
 	AgentConfig AgentConfig
 

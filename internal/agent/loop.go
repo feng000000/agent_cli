@@ -159,7 +159,6 @@ func agentHandler(ctx *runtime.LoopContext) (*runtime.AgentResponse, error) {
 		return nil, fmt.Errorf("invalid LoopContext")
 	}
 
-	// TODO: update history, memory
 
 	if err != nil {
 		return nil, err

@@ -4,6 +4,7 @@ import "context"
 import "time"
 
 import "myagent/internal/runtime"
+import agentctx "myagent/internal/context"
 import "myagent/pkg/llm"
 import "myagent/pkg/logger"
 
@@ -17,7 +18,10 @@ func HandleQuery(ctx *runtime.LoopContext) error {
 		logger.Debugf("\tmessage: %+v\n", message)
 	}
 
-	messages := []llm.Message{llm.UserMessage(ctx.UserQuery)}
+	messages := []llm.Message{
+		llm.SystemMessage(agentctx.GetSystemPrompt()),
+		llm.UserMessage(ctx.UserQuery),
+	}
 
 	timeoutCtx, cancel := context.WithTimeout(
 		context.Background(), 60*time.Second,

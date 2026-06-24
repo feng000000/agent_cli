@@ -8,7 +8,7 @@ import "myagent/internal/runtime"
 import "myagent/pkg/llm"
 import "myagent/pkg/logger"
 
-func HandleToolCall(ctx *runtime.LoopContext) error {
+func HandleToolCall(ctx *runtime.AgentState) error {
 	idChanMap := map[llm.ToolCall]chan string{}
 
 	logger.Debugf("HandleToolCall Start >>>>>>>>>>>>>>>>\n")
@@ -29,7 +29,7 @@ func HandleToolCall(ctx *runtime.LoopContext) error {
 			)
 		}
 
-		go tool.Execute(tc.Function.Arguments, resCh)
+		tool.Execute(tc.Function.Arguments, resCh)
 
 	}
 

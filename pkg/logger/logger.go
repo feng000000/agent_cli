@@ -100,18 +100,12 @@ func InitLogger(level string, logFilePath string) error {
 		StacktraceKey: stackTraceKey,
 	}
 
-	var core zapcore.Core
-
-	console_core := createConsoleCore(logLevel, encoderConfig)
-	if logFilePath != "" {
-		file_core, err := createFileCore(logLevel, encoderConfig, logFilePath)
-		if err != nil {
-			return err
-		}
-
-		core = zapcore.NewTee(*console_core, *file_core)
-	} else {
-		core = *console_core
+	if logFilePath == "" {
+		return fmt.Errorf("invalid log file")
+	}
+	core, err := createFileCore(logLevel, encoderConfig, logFilePath)
+	if err != nil {
+		return err
 	}
 
 	logger = zap.New(
@@ -128,7 +122,7 @@ func createFileCore(
 	logLevel zapcore.Level,
 	encoderConfig zapcore.EncoderConfig,
 	logFilePath string,
-) (*zapcore.Core, error) {
+) (zapcore.Core, error) {
 	encoderConfig.EncodeLevel = zapcore.CapitalLevelEncoder
 	encoderConfig.EncodeTime = zapcore.RFC3339TimeEncoder
 	encoderConfig.EncodeCaller = zapcore.ShortCallerEncoder
@@ -149,13 +143,13 @@ func createFileCore(
 		zapcore.AddSync(file),
 		zap.NewAtomicLevelAt(logLevel),
 	)
-	return &core, nil
+	return core, nil
 }
 
 func createConsoleCore(
 	logLevel zapcore.Level,
 	encoderConfig zapcore.EncoderConfig,
-) *zapcore.Core {
+) zapcore.Core {
 	encoderConfig.EncodeLevel = levelEncoder
 	encoderConfig.EncodeTime = timeEncoder
 	encoderConfig.EncodeCaller = zapcore.ShortCallerEncoder
@@ -168,5 +162,5 @@ func createConsoleCore(
 		zapcore.AddSync(os.Stdout),
 		zap.NewAtomicLevelAt(logLevel),
 	)
-	return &core
+	return core
 }

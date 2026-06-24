@@ -1,7 +1,9 @@
 package runtime
 
-import "myagent/internal/tool"
-import "myagent/pkg/llm"
+import (
+	"myagent/internal/tool"
+	"myagent/pkg/llm"
+)
 
 type AgentMode string
 
@@ -19,12 +21,12 @@ const (
 )
 
 type AgentConfig struct {
-	AgentMode AgentMode
+	AgentMode   AgentMode
 	ToolAskMode ToolAskMode
 }
 
-// TODO: Usage
-type LoopContext struct {
+// TODO: Model Usage
+type AgentState struct {
 	AgentConfig AgentConfig
 
 	// InputChan 可以直接追加信息
@@ -41,7 +43,7 @@ type LoopContext struct {
 	Response *llm.ChatResponse
 }
 
-func (lc *LoopContext) ToolList() []llm.Tool {
+func (lc *AgentState) ToolList() []llm.Tool {
 	toolList := []llm.Tool{}
 	for _, tool := range lc.ToolMap {
 		toolList = append(toolList, *tool.Definition())
@@ -49,20 +51,27 @@ func (lc *LoopContext) ToolList() []llm.Tool {
 	return toolList
 }
 
-
 type ResponseType string
+
 const (
-	AgentRespTypeCMD = "command"
-	AgentRespTypeLLM = "llm_response"
-	AgentRespTypeError = "error"
+	AgentRespTypeCmd       = "command"
+	AgentRespTypeLLM       = "llm_response"
+	AgentRespTypeError     = "error"
 	AgentRespTypeMiddleMsg = "middle_message"
 )
 
 type AgentResponse struct {
 	RespType ResponseType
 
-	CMDResult string
-	LLMResponse *llm.ChatResponse
-	Err error
+	CmdResult     string
+	LLMResponse   *llm.ChatResponse
+	Err           error
 	MiddleMessage string
+}
+
+
+
+type ClientState struct {
+	CancelFunc func()
+
 }

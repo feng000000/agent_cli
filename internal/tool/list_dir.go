@@ -1,11 +1,12 @@
 package tool
 
-import "encoding/json"
-import "fmt"
-import "os"
-import "strings"
-
-import "myagent/pkg/llm"
+import (
+	"encoding/json"
+	"fmt"
+	"myagent/pkg/llm"
+	"os"
+	"strings"
+)
 
 type ListDirTool struct{}
 
@@ -37,7 +38,11 @@ func (t ListDirTool) Definition() *llm.Tool {
 	}
 }
 
-func (t ListDirTool) Execute(arg string, res chan string) {
+func (t ListDirTool) Execute(args string, res chan string) {
+	go t.execute(args, res)
+}
+
+func (t ListDirTool) execute(arg string, res chan string) {
 	var args listDirArgs
 	if err := json.Unmarshal([]byte(arg), &args); err != nil {
 		res <- fmt.Sprintf("invalid arguments: %v", err)
@@ -57,12 +62,27 @@ func (t ListDirTool) Execute(arg string, res chan string) {
 	}
 
 	names := make([]string, 0, len(entries))
+	limit := 200
 	for _, entry := range entries {
 		name := entry.Name()
+		info, err := entry.Info()
+		if err != nil {
+			res <- fmt.Sprintf("read entry info failed: %v", err)
+			return
+		}
+
+		filemode := info.Mode()
+		filesize := info.Size()
+
 		if entry.IsDir() {
 			name += "/"
 		}
-		names = append(names, name)
+		// -rw-rw-r--	330	file.go
+		names = append(names, fmt.Sprintf("%v\t%v\t%v", filemode, filesize, name))
+		if len(names) >= limit {
+			names = append(names, "[truncated]: too many files/folders")
+			break
+		}
 	}
 
 	if len(names) == 0 {

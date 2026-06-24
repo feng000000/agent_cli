@@ -1,6 +1,12 @@
 package command
 
-type CialloCommand struct {}
+import (
+	"myagent/internal/runtime"
+	"myagent/pkg/logger"
+	"time"
+)
+
+type CialloCommand struct{}
 
 func (c CialloCommand) Name() string {
 	return "ciallo"
@@ -12,6 +18,11 @@ func (c CialloCommand) Desc() string {
 }
 
 // Exec 输出mock数据
-func (c CialloCommand) Exec(args []string) (string, error) {
+func (c CialloCommand) Exec(
+	state *runtime.AgentState, args []string,
+) (string, error) {
+	logger.Debugf("Exec ciallo, prepare to sleep\n")
+	time.Sleep(time.Second * 5)
+
 	return "Ciallo~", nil
 }

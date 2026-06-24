@@ -1,7 +1,10 @@
 package command
 
+import "myagent/internal/runtime"
 
-type Command interface {
+
+// AgentCommand 由Agent处理的命令
+type AgentCommand interface {
 	// Name 命令名称, 可通过 /Name 调用
 	Name() string
 
@@ -9,18 +12,43 @@ type Command interface {
 	Desc() string
 
 	// Exec 执行命令
-	Exec(args []string) (string, error)
+	Exec(state *runtime.AgentState, args []string) (string, error)
 }
 
 
-// TODO: more command (core)
-var cmdRegistry map[string]Command = map[string]Command{
+// ClientCommand 由客户端处理的命令
+type ClientCommand interface {
+	// Name 命令名称, 可通过 /Name 调用
+	Name() string
+
+	// Desc command 作用描述, 以及用法说明
+	Desc() string
+
+	// Exec 执行命令
+	Exec(state *runtime.ClientState, args []string) (string, error)
+}
+
+
+// TODO: more command
+var agentCmdRegistry = map[string]AgentCommand{
 	"ciallo": CialloCommand{},
 }
+var clientCmdRegistry = map[string]ClientCommand{
+	"stop": StopCommand{},
+}
 
 
-func GetCommand(name string) Command {
-	cmd, ok := cmdRegistry[name]
+func GetAgentCommand(name string) AgentCommand {
+	cmd, ok := agentCmdRegistry[name]
+	if !ok {
+		return nil
+	}
+
+	return cmd
+}
+
+func GetClientCommand(name string) ClientCommand {
+	cmd, ok := clientCmdRegistry[name]
 	if !ok {
 		return nil
 	}

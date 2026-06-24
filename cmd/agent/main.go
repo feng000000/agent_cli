@@ -1,11 +1,13 @@
 package main
 
-import "os"
-import "log"
+import (
+	"log"
+	"os"
 
-import "myagent/internal/agent"
-import "myagent/internal/config"
-import "myagent/pkg/logger"
+	"myagent/internal/agent"
+	"myagent/internal/config"
+	"myagent/pkg/logger"
+)
 
 
 func main() {
@@ -20,11 +22,9 @@ func main() {
 	defer logger.Sync()
 
 
-	a := agent.Agent{
-		Config: cfg,
-	}
+	a := agent.Agent{Config: cfg}
 
-	if a.Exec(os.Stdin, os.Stdout) != nil {
+	if a.StartSimpleUI(os.Stdin, os.Stdout) != nil {
 		log.Fatalf("%v", err)
 	}
 }

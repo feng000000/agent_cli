@@ -8,7 +8,7 @@ import agentctx "myagent/internal/context"
 import "myagent/pkg/llm"
 import "myagent/pkg/logger"
 
-func HandleQuery(ctx *runtime.LoopContext) error {
+func HandleQuery(ctx *runtime.AgentState) error {
 	logger.Infof("Handle query")
 
 	logger.Debugf("HandleQuery Start >>>>>>>>>>>>>>>>\n\n")

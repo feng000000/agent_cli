@@ -101,7 +101,7 @@ func InitLogger(level string, logFilePath string) error {
 	}
 
 	if logFilePath == "" {
-		return fmt.Errorf("invalid log file")
+		return fmt.Errorf("invalid log path")
 	}
 	core, err := createFileCore(logLevel, encoderConfig, logFilePath)
 	if err != nil {

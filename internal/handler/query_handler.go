@@ -3,7 +3,6 @@ package handler
 import (
 	"context"
 	"myagent/internal/config"
-	agentctx "myagent/internal/context"
 	"myagent/internal/runtime"
 	"myagent/pkg/llm"
 	"myagent/pkg/logger"
@@ -20,12 +19,8 @@ func HandleQuery(cfg config.ProjectConfig, state *runtime.AgentState) error {
 		logger.Debugf("\tmessage: %+v\n", message)
 	}
 
-	systemPrompt, err := agentctx.GetSystemPrompt(cfg)
-	if err != nil {
-		return err
-	}
 	messages := []llm.Message{
-		llm.SystemMessage(systemPrompt),
+		llm.SystemMessage(state.SystemPrompt),
 		llm.UserMessage(state.UserQuery),
 	}
 
@@ -64,7 +59,6 @@ func HandleQuery(cfg config.ProjectConfig, state *runtime.AgentState) error {
 		return err
 	}
 
-	state.UserQuery = ""
 	state.Response = resp
 
 	assistantMsg, ok := resp.Message()

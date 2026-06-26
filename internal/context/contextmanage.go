@@ -1,8 +1,9 @@
 package context
 
 import (
-	"context"
 	_ "embed"
+	"os"
+	"context"
 	"fmt"
 	"strings"
 	"text/template"
@@ -20,11 +21,16 @@ type systemPromptParams struct {
 
 }
 
+
+// TODO: 确定 skill 结构, 注入 skill 描述
 func GetSystemPrompt(cfg config.ProjectConfig) (string, error) {
 	tmpl, err := template.New("system").Parse(systemPromptTemplate)
 	if err != nil {
 		return "", err
 	}
+
+	memoryData, err := os.ReadFile(cfg.Workspace.MemoryPath)
+	userInfoData, err := os.ReadFile(cfg.Workspace.UserInfoPath)
 
 	sb := strings.Builder{}
 	tmpl.Execute(
@@ -32,8 +38,8 @@ func GetSystemPrompt(cfg config.ProjectConfig) (string, error) {
 		map[string]string{
 			"Date": time.Now().Format(time.DateOnly),
 			"Workspace": cfg.Workspace.WorkspaceDir,
-			"MemoryPath": cfg.Workspace.MemoryPath,
-			"UserInfoPath": cfg.Workspace.UserInfoPath,
+			"Memory": string(memoryData),
+			"UserInfo": string(userInfoData),
 			"SkillDir": cfg.Workspace.SkillDir,
 		},
 	)

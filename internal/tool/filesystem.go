@@ -18,12 +18,16 @@ func (t ListDirTool) Name() string {
 	return "list_directory"
 }
 
+func (t ListDirTool) Desc() string {
+	return "list information about all files and folders within the directory"
+}
+
 func (t ListDirTool) Definition() *llm.Tool {
 	return &llm.Tool{
 		Type: llm.ToolTypeFunction,
 		Function: llm.FunctionTool{
 			Name:        t.Name(),
-			Description: "list information about all files and folders within the directory",
+			Description: t.Desc(),
 			Parameters: map[string]any{
 				"type": "object",
 				"properties": map[string]any{
@@ -39,7 +43,14 @@ func (t ListDirTool) Definition() *llm.Tool {
 }
 
 func (t ListDirTool) Execute(args string, res chan string) {
-	go t.execute(args, res)
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				res <- fmt.Sprintf("exec tool panic: %v", r)
+			}
+		}()
+		t.execute(args, res)
+	}()
 }
 
 func (t ListDirTool) execute(arg string, res chan string) {
@@ -91,4 +102,51 @@ func (t ListDirTool) execute(arg string, res chan string) {
 	}
 
 	res <- strings.Join(names, "\n")
+}
+
+
+
+
+type ReadFileTool struct{}
+
+type ReadFileArgs struct {
+	Path string `json:"path"`
+}
+
+func (t ReadFileTool) Name() string {
+	return "read_file"
+}
+
+
+func (t ReadFileTool) Desc() string {
+	return "read the given path file, return the file content (string)"
+}
+
+
+func (t ReadFileTool) Definition() *llm.Tool {
+	return &llm.Tool{
+		Type: llm.ToolTypeFunction,
+		Function: llm.FunctionTool{
+			Name:        t.Name(),
+			Description: "read the given path file, return the file content (string)",
+			Parameters: map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"path": map[string]any{
+						"type":        "string",
+						"description": "Folder directory to view",
+					},
+				},
+				"required": []string{"path"},
+			},
+		},
+	}
+}
+
+func (t ReadFileTool) Execute(args string, res chan string) {
+	go t.execute(args, res)
+}
+
+func (t ReadFileTool) execute(arg string, res chan string) {
+	// TODO: implement
 }

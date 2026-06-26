@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"myagent/internal/config"
+	agentctx "myagent/internal/context"
 	"myagent/internal/handler"
 	"myagent/internal/runtime"
 	"myagent/internal/tool"
@@ -37,6 +38,10 @@ func (a *Agent) InitAgentState(
 	if err != nil {
 		panic(err)
 	}
+	systemPrompt, err := agentctx.GetSystemPrompt(a.Config)
+	if err != nil {
+		panic(err)
+	}
 
 	a.State = runtime.AgentState{
 		Ctx: ctx,
@@ -44,7 +49,7 @@ func (a *Agent) InitAgentState(
 			AgentMode:   runtime.AgentModePlan,
 			ToolAskMode: runtime.ToolAskModeAuto,
 		},
-
+		SystemPrompt: systemPrompt,
 		UserQuery:  query,
 		InputChan:  input,
 		OutputChan: output,
@@ -105,12 +110,12 @@ func (a *Agent) agentHandler() (*runtime.AgentResponse, error) {
 			RespType:  runtime.AgentRespTypeCmd,
 			CmdResult: res,
 		}, nil
-	} else if a.State.UserQuery != "" { // normal query
-		logger.Debugf("handle query: %v\n", a.State.UserQuery)
-		err = handler.HandleQuery(a.Config, &a.State)
 	} else if a.State.Response.HasToolCalls() { // tool call
 		logger.Debugf("handle tool call: %v\n", a.State.UserQuery)
 		err = handler.HandleToolCall(&a.State)
+	} else if a.State.UserQuery != "" { // normal query
+		logger.Debugf("handle query: %v\n", a.State.UserQuery)
+		err = handler.HandleQuery(a.Config, &a.State)
 	} else { // invalid query
 		logger.Errorf("invalid LoopContext\n")
 		return nil, fmt.Errorf("invalid LoopContext")

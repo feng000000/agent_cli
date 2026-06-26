@@ -37,6 +37,7 @@ type AgentState struct {
 
 	AgentConfig AgentConfig
 	LLMClient  llm.LLMClient
+	SystemPrompt string
 
 	UserQuery string
 

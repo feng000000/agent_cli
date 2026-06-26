@@ -1,6 +1,7 @@
 package runtime
 
 import (
+	"context"
 	"myagent/internal/tool"
 	"myagent/pkg/llm"
 )
@@ -27,12 +28,14 @@ type AgentConfig struct {
 
 // TODO: Model Usage
 type AgentState struct {
-	AgentConfig AgentConfig
+	Ctx context.Context
 
 	// InputChan 可以直接追加信息
 	InputChan chan string
 	// OutputChan 可以直接输出临时信息
 	OutputChan chan AgentResponse
+
+	AgentConfig AgentConfig
 	LLMClient  llm.LLMClient
 
 	UserQuery string

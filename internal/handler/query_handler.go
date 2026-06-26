@@ -1,26 +1,32 @@
 package handler
 
-import "context"
-import "time"
+import (
+	"context"
+	"myagent/internal/config"
+	agentctx "myagent/internal/context"
+	"myagent/internal/runtime"
+	"myagent/pkg/llm"
+	"myagent/pkg/logger"
+	"time"
+)
 
-import "myagent/internal/runtime"
-import agentctx "myagent/internal/context"
-import "myagent/pkg/llm"
-import "myagent/pkg/logger"
-
-func HandleQuery(ctx *runtime.AgentState) error {
+func HandleQuery(cfg config.ProjectConfig, state *runtime.AgentState) error {
 	logger.Infof("Handle query")
 
 	logger.Debugf("HandleQuery Start >>>>>>>>>>>>>>>>\n\n")
-	logger.Debugf("[HandleQuery] query: %v\n", ctx.UserQuery)
+	logger.Debugf("[HandleQuery] query: %v\n", state.UserQuery)
 	logger.Debugf("[HandleQuery] message (before):")
-	for _, message := range ctx.MessageParams {
+	for _, message := range state.MessageParams {
 		logger.Debugf("\tmessage: %+v\n", message)
 	}
 
+	systemPrompt, err := agentctx.GetSystemPrompt(cfg)
+	if err != nil {
+		return err
+	}
 	messages := []llm.Message{
-		llm.SystemMessage(agentctx.GetSystemPrompt()),
-		llm.UserMessage(ctx.UserQuery),
+		llm.SystemMessage(systemPrompt),
+		llm.UserMessage(state.UserQuery),
 	}
 
 	timeoutCtx, cancel := context.WithTimeout(
@@ -28,11 +34,11 @@ func HandleQuery(ctx *runtime.AgentState) error {
 	)
 	defer cancel()
 
-	resp, err := ctx.LLMClient.Chat(
+	resp, err := state.LLMClient.Chat(
 		timeoutCtx,
 		llm.ChatRequest{
 			Messages:   messages,
-			Tools:      ctx.ToolList(),
+			Tools:      state.ToolList(),
 			ToolChoice: llm.ToolChoiceAuto,
 		},
 	)
@@ -58,24 +64,24 @@ func HandleQuery(ctx *runtime.AgentState) error {
 		return err
 	}
 
-	ctx.UserQuery = ""
-	ctx.Response = resp
+	state.UserQuery = ""
+	state.Response = resp
 
 	assistantMsg, ok := resp.Message()
 	if ok {
-		ctx.MessageParams = append(ctx.MessageParams, assistantMsg)
+		state.MessageParams = append(state.MessageParams, assistantMsg)
 	}
 
 
 	logger.Debugf("[HandleQuery] message (after):\n")
-	for _, message := range ctx.MessageParams {
+	for _, message := range state.MessageParams {
 		logger.Debugf("\tmessage: %+v\n", message)
 	}
 	logger.Debugf("HandleQuery Done <<<<<<<<<<<<<<<<\n\n")
 
-	lastMsg := ctx.MessageParams[len(ctx.MessageParams) - 1]
+	lastMsg := state.MessageParams[len(state.MessageParams) - 1]
 	if lastMsg.ReasoningContent != "" {
-		ctx.OutputChan <- runtime.AgentResponse{
+		state.OutputChan <- runtime.AgentResponse{
 			RespType: runtime.AgentRespTypeMiddleMsg,
 			MiddleMessage: lastMsg.ReasoningContent,
 		}

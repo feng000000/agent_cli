@@ -24,7 +24,7 @@ func main() {
 
 	a := agent.Agent{Config: cfg}
 
-	if a.StartSimpleUI(os.Stdin, os.Stdout) != nil {
+	if agent.StartSimpleUI(a, os.Stdin, os.Stdout) != nil {
 		log.Fatalf("%v", err)
 	}
 }

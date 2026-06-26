@@ -17,15 +17,15 @@ type WorkspaceConfig struct {
 	SkillDir     string `json:"skill_dir"`
 }
 
-type AgentConfig struct {
+type ProjectConfig struct {
 	LogPath string `json:"log_path"`
 
 	LLM       LLMConfig       `json:"llm"`
 	Workspace WorkspaceConfig `json:"workspace"`
 }
 
-func defaultAgentConfig() AgentConfig {
-	return AgentConfig{
+func defaultAgentConfig() ProjectConfig {
+	return ProjectConfig{
 		LogPath: "",
 		Workspace: WorkspaceConfig{
 			WorkspaceDir: "./workspace",
@@ -36,12 +36,12 @@ func defaultAgentConfig() AgentConfig {
 	}
 }
 
-func InitAgentConfig(path string) (AgentConfig, error) {
+func InitAgentConfig(path string) (ProjectConfig, error) {
 	cfg := defaultAgentConfig()
 
 	file, err := os.Open(path)
 	if err != nil {
-		return AgentConfig{}, fmt.Errorf("open config: %w", err)
+		return ProjectConfig{}, fmt.Errorf("open config: %w", err)
 	}
 	defer file.Close()
 
@@ -49,7 +49,7 @@ func InitAgentConfig(path string) (AgentConfig, error) {
 	// decoder.DisallowUnknownFields()
 
 	if err := decoder.Decode(&cfg); err != nil {
-		return AgentConfig{}, fmt.Errorf("decode config: %w", err)
+		return ProjectConfig{}, fmt.Errorf("decode config: %w", err)
 	}
 
 	return cfg, nil

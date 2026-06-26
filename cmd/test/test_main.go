@@ -4,7 +4,7 @@ import "fmt"
 import "log"
 import "context"
 import "myagent/pkg/llm"
-import "myagent/internal/tools"
+import "myagent/internal/tool"
 
 type jsonO map[string]any
 
@@ -18,7 +18,7 @@ func main() {
 		llm.UserMessage("./ 目录下有哪些文件"),
 	}
 
-	listDirTool := tools.ListDirTool{}
+	listDirTool := tool.ListDirTool{}
 
 	tools := []llm.Tool{
 		*listDirTool.Definition(),
@@ -63,7 +63,11 @@ func main() {
 	assistantMsg, _ := resp.Message()
 	messages = append(messages, assistantMsg)
 	for _, tc := range resp.ToolCalls() {
-		fmt.Printf("tool call: %s(%s)\n", tc.Function.Name, tc.Function.Arguments)
+		fmt.Printf(
+			"tool call: %s(%s)\n",
+			tc.Function.Name,
+			tc.Function.Arguments,
+		)
 		if tc.Function.Name == listDirTool.Name() {
 
 			// 这里替换成真实工具执行逻辑

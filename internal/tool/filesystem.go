@@ -1,12 +1,11 @@
 package tool
 
-import (
-	"encoding/json"
-	"fmt"
-	"myagent/pkg/llm"
-	"os"
-	"strings"
-)
+import "encoding/json"
+import "fmt"
+import "os"
+import "strings"
+
+import "myagent/pkg/llm"
 
 type ListDirTool struct{}
 
@@ -104,9 +103,6 @@ func (t ListDirTool) execute(arg string, res chan string) {
 	res <- strings.Join(names, "\n")
 }
 
-
-
-
 type ReadFileTool struct{}
 
 type ReadFileArgs struct {
@@ -117,11 +113,9 @@ func (t ReadFileTool) Name() string {
 	return "read_file"
 }
 
-
 func (t ReadFileTool) Desc() string {
 	return "read the given path file, return the file content (string)"
 }
-
 
 func (t ReadFileTool) Definition() *llm.Tool {
 	return &llm.Tool{

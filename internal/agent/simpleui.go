@@ -1,18 +1,15 @@
 package agent
 
-import (
-	"bytes"
-	"context"
-	"errors"
-	"fmt"
-	"io"
-	"strings"
+import "bytes"
+import "context"
+import "errors"
+import "fmt"
+import "io"
+import "strings"
 
-	"myagent/internal/handler"
-	"myagent/internal/runtime"
-	"myagent/pkg/logger"
-)
-
+import "myagent/internal/handler"
+import "myagent/internal/runtime"
+import "myagent/pkg/logger"
 
 func StartSimpleUI(a Agent, input io.Reader, output io.Writer) error {
 	ich := make(chan string)
@@ -30,7 +27,7 @@ func StartSimpleUI(a Agent, input io.Reader, output io.Writer) error {
 		clientState := runtime.ClientState{CancelFunc: cancel}
 
 		if strings.HasPrefix(query, "/") {
-			res, err := handler.HandleClientCommand(&clientState, query)
+			res, err := handler.HandleClientCommand(ctx, &clientState, query)
 			if err == nil {
 				logger.Debugf("exec client command: %v %v", res, err)
 				fmt.Fprintf(output, "|🔧: %s\n", res)

@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"fmt"
 	"myagent/internal/command"
 	"myagent/internal/runtime"
@@ -25,7 +26,9 @@ func splitCommand(query string) (*cmd, error) {
 }
 
 func HandleClientCommand(
-	state *runtime.ClientState, query string,
+	ctx context.Context,
+	state *runtime.ClientState,
+	query string,
 ) (string, error) {
 	cmdInput, err := splitCommand(query)
 	if err != nil {
@@ -37,12 +40,15 @@ func HandleClientCommand(
 		return "", SkipHandleCommand
 	}
 
-	res, err := cmd.Exec(state, cmdInput.Args)
+	res, err := cmd.Exec(ctx, state, cmdInput.Args)
 	return res, nil
 }
 
 // HandleAgentCommand 处理Agent运行时的命令
-func HandleAgentCommand(state *runtime.AgentState) (string, error) {
+func HandleAgentCommand(
+	ctx context.Context,
+	state *runtime.AgentState,
+) (string, error) {
 	cmdInput, err := splitCommand(state.UserQuery)
 	if err != nil {
 		return "", err
@@ -54,7 +60,7 @@ func HandleAgentCommand(state *runtime.AgentState) (string, error) {
 	}
 
 	logger.Debugf("call command %v\n", cmd.Name())
-	res, err := cmd.Exec(state, cmdInput.Args)
+	res, err := cmd.Exec(ctx,state, cmdInput.Args)
 	if err != nil {
 		return "", err
 	}

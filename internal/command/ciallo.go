@@ -1,10 +1,10 @@
 package command
 
-import (
-	"myagent/internal/runtime"
-	"myagent/pkg/logger"
-	"time"
-)
+import "context"
+import "time"
+
+import "myagent/internal/runtime"
+import "myagent/pkg/logger"
 
 type CialloCommand struct{}
 
@@ -19,7 +19,9 @@ func (c CialloCommand) Desc() string {
 
 // Exec 输出mock数据
 func (c CialloCommand) Exec(
-	state *runtime.AgentState, args []string,
+	ctx context.Context,
+	state *runtime.AgentState,
+	args []string,
 ) (string, error) {
 	logger.Debugf("Exec ciallo, prepare to sleep\n")
 	time.Sleep(time.Second * 5)

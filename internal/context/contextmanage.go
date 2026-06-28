@@ -1,26 +1,19 @@
 package context
 
-import (
-	_ "embed"
-	"os"
-	"context"
-	"fmt"
-	"strings"
-	"text/template"
-	"time"
+import "context"
+import _ "embed"
+import "fmt"
+import "os"
+import "strings"
+import "text/template"
+import "time"
 
-	"myagent/internal/runtime"
-	"myagent/internal/config"
-	"myagent/pkg/llm"
-)
+import "myagent/internal/config"
+import "myagent/internal/runtime"
+import "myagent/pkg/llm"
 
 //go:embed prompts/system_prompt.md
 var systemPromptTemplate string
-
-type systemPromptParams struct {
-
-}
-
 
 // TODO: 确定 skill 结构, 注入 skill 描述
 func GetSystemPrompt(cfg config.ProjectConfig) (string, error) {
@@ -36,11 +29,11 @@ func GetSystemPrompt(cfg config.ProjectConfig) (string, error) {
 	tmpl.Execute(
 		&sb,
 		map[string]string{
-			"Date": time.Now().Format(time.DateOnly),
+			"Date":      time.Now().Format(time.DateOnly),
 			"Workspace": cfg.Workspace.WorkspaceDir,
-			"Memory": string(memoryData),
-			"UserInfo": string(userInfoData),
-			"SkillDir": cfg.Workspace.SkillDir,
+			"Memory":    string(memoryData),
+			"UserInfo":  string(userInfoData),
+			"SkillDir":  cfg.Workspace.SkillDir,
 		},
 	)
 
@@ -55,9 +48,8 @@ type Compressor interface {
 var compressSystemPrompt string
 
 // LLMCompressor 大模型压缩总结
-type LLMCompressor struct {}
+type LLMCompressor struct{}
 
-// Compress 使用大模型总结历史信息
 func (lc *LLMCompressor) Compress(
 	ctx context.Context, state *runtime.AgentState,
 ) error {
@@ -83,13 +75,12 @@ func (lc *LLMCompressor) Compress(
 	return nil
 }
 
-// HybridCompressor 混合压缩, 最近k条保留, 之前的大模型压缩
-type HybridCompressor struct {
+// TruncateCompressor 直接截断, 只保留 topK 轮消息
+type TruncateCompressor struct {
 	topK int
 }
 
-// extractSystemPrompt 提取
-func (hc *HybridCompressor) extractSystemPrompt(
+func (tc *TruncateCompressor) extractSystemPrompt(
 	messages []llm.Message,
 ) (sysPrompt *llm.Message, resMessages []llm.Message) {
 	for i, msg := range messages {
@@ -103,8 +94,7 @@ func (hc *HybridCompressor) extractSystemPrompt(
 	return nil, messages
 }
 
-// splitCompressMessages 拆分 待压缩的消息
-func (hc *HybridCompressor) splitCompressMessages(
+func (tc *TruncateCompressor) splitCompressMessages(
 	messages []llm.Message,
 ) (toCompress []llm.Message, kept []llm.Message) {
 	if len(messages) == 0 {
@@ -113,7 +103,7 @@ func (hc *HybridCompressor) splitCompressMessages(
 	pos := len(messages) - 1
 	for i := pos; i >= 0; i-- {
 		if messages[i].Role == llm.RoleUser &&
-			(pos == len(messages)-1 || len(messages)-i <= hc.topK) {
+			(pos == len(messages)-1 || len(messages)-i <= tc.topK) {
 			pos = i
 		}
 	}
@@ -121,7 +111,24 @@ func (hc *HybridCompressor) splitCompressMessages(
 	return messages[pos:], messages[pos+1:]
 }
 
-// Compress 混合压缩, 最近 <=k条保留(以用户消息划分), 之前的记录使用大模型压缩
+func (tc *TruncateCompressor) Compress(
+	ctx context.Context, state *runtime.AgentState,
+) error {
+	sysPrompt, messages := tc.extractSystemPrompt(state.MessageParams)
+	_, kept := tc.splitCompressMessages(messages)
+
+	// system prompt + kept messages
+	state.MessageParams = append([]llm.Message{*sysPrompt}, kept...)
+
+	return nil
+}
+
+// HybridCompressor 混合压缩, 最近 <=k条保留(以用户消息划分),
+// 之前的记录使用大模型压缩
+type HybridCompressor struct {
+	TruncateCompressor
+}
+
 func (hc *HybridCompressor) Compress(
 	ctx context.Context,
 	state *runtime.AgentState,

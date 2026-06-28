@@ -1,5 +1,6 @@
 package command
 
+import "context"
 import "myagent/internal/runtime"
 
 type StopCommand struct{}
@@ -15,7 +16,9 @@ func (c StopCommand) Desc() string {
 
 // Exec 停止Agent 运行
 func (c StopCommand) Exec(
-	state *runtime.ClientState, args []string,
+	ctx context.Context,
+	state *runtime.ClientState,
+	args []string,
 ) (string, error) {
 	state.CancelFunc()
 	return "", nil

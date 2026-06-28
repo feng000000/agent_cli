@@ -1,7 +1,7 @@
 package command
 
+import "context"
 import "myagent/internal/runtime"
-
 
 // AgentCommand 由Agent处理的命令
 type AgentCommand interface {
@@ -12,9 +12,12 @@ type AgentCommand interface {
 	Desc() string
 
 	// Exec 执行命令
-	Exec(state *runtime.AgentState, args []string) (string, error)
+	Exec(
+		ctx context.Context,
+		state *runtime.AgentState,
+		args []string,
+	) (string, error)
 }
-
 
 // ClientCommand 由客户端处理的命令
 type ClientCommand interface {
@@ -25,9 +28,12 @@ type ClientCommand interface {
 	Desc() string
 
 	// Exec 执行命令
-	Exec(state *runtime.ClientState, args []string) (string, error)
+	Exec(
+		ctx context.Context,
+		state *runtime.ClientState,
+		args []string,
+	) (string, error)
 }
-
 
 // TODO: more command
 var agentCmdRegistry = map[string]AgentCommand{
@@ -36,7 +42,6 @@ var agentCmdRegistry = map[string]AgentCommand{
 var clientCmdRegistry = map[string]ClientCommand{
 	"stop": StopCommand{},
 }
-
 
 func GetAgentCommand(name string) AgentCommand {
 	cmd, ok := agentCmdRegistry[name]

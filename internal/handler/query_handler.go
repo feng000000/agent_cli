@@ -1,15 +1,13 @@
 package handler
 
-import (
-	"context"
-	"myagent/internal/config"
-	"myagent/internal/runtime"
-	"myagent/pkg/llm"
-	"myagent/pkg/logger"
-	"time"
-)
+import "context"
 
-func HandleQuery(cfg config.ProjectConfig, state *runtime.AgentState) error {
+import "myagent/internal/config"
+import "myagent/internal/runtime"
+import "myagent/pkg/llm"
+import "myagent/pkg/logger"
+
+func HandleQuery(ctx context.Context, cfg config.ProjectConfig, state *runtime.AgentState) error {
 	logger.Infof("Handle query")
 
 	logger.Debugf("HandleQuery Start >>>>>>>>>>>>>>>>\n\n")
@@ -24,13 +22,8 @@ func HandleQuery(cfg config.ProjectConfig, state *runtime.AgentState) error {
 		llm.UserMessage(state.UserQuery),
 	}
 
-	timeoutCtx, cancel := context.WithTimeout(
-		context.Background(), 60*time.Second,
-	)
-	defer cancel()
-
 	resp, err := state.LLMClient.Chat(
-		timeoutCtx,
+		ctx,
 		llm.ChatRequest{
 			Messages:   messages,
 			Tools:      state.ToolList(),
@@ -66,17 +59,16 @@ func HandleQuery(cfg config.ProjectConfig, state *runtime.AgentState) error {
 		state.MessageParams = append(state.MessageParams, assistantMsg)
 	}
 
-
 	logger.Debugf("[HandleQuery] message (after):\n")
 	for _, message := range state.MessageParams {
 		logger.Debugf("\tmessage: %+v\n", message)
 	}
 	logger.Debugf("HandleQuery Done <<<<<<<<<<<<<<<<\n\n")
 
-	lastMsg := state.MessageParams[len(state.MessageParams) - 1]
+	lastMsg := state.MessageParams[len(state.MessageParams)-1]
 	if lastMsg.ReasoningContent != "" {
 		state.OutputChan <- runtime.AgentResponse{
-			RespType: runtime.AgentRespTypeMiddleMsg,
+			RespType:      runtime.AgentRespTypeMiddleMsg,
 			MiddleMessage: lastMsg.ReasoningContent,
 		}
 	}

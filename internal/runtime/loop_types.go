@@ -1,10 +1,9 @@
 package runtime
 
-import (
-	"context"
-	"myagent/internal/tool"
-	"myagent/pkg/llm"
-)
+import "context"
+
+import "myagent/internal/tool"
+import "myagent/pkg/llm"
 
 type AgentMode string
 
@@ -26,25 +25,23 @@ type AgentConfig struct {
 	ToolAskMode ToolAskMode
 }
 
-// TODO: Model Usage
 type AgentState struct {
 	Ctx context.Context
 
 	// InputChan 可以直接追加信息
 	InputChan chan string
 	// OutputChan 可以直接输出临时信息
-	OutputChan chan AgentResponse
-
-	AgentConfig AgentConfig
-	LLMClient  llm.LLMClient
+	OutputChan   chan AgentResponse
+	AgentConfig  AgentConfig
+	LLMClient    llm.LLMClient
 	SystemPrompt string
+	ToolMap      map[string]tool.Tool
 
-	UserQuery string
-
+	UserQuery     string
 	MessageParams []llm.Message
-	ToolMap       map[string]tool.Tool
-
-	Response *llm.ChatResponse
+	Usage         llm.Usage
+	ContextSize   int
+	Response      *llm.ChatResponse
 }
 
 func (lc *AgentState) ToolList() []llm.Tool {
@@ -73,9 +70,6 @@ type AgentResponse struct {
 	MiddleMessage string
 }
 
-
-
 type ClientState struct {
 	CancelFunc func()
-
 }

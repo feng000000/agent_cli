@@ -1,19 +1,17 @@
 package agent
 
-import (
-	"context"
-	"errors"
-	"fmt"
-	"strings"
+import "context"
+import "errors"
+import "fmt"
+import "strings"
 
-	"myagent/internal/config"
-	agentctx "myagent/internal/context"
-	"myagent/internal/handler"
-	"myagent/internal/runtime"
-	"myagent/internal/tool"
-	"myagent/pkg/llm"
-	"myagent/pkg/logger"
-)
+import "myagent/internal/config"
+import agentctx "myagent/internal/context"
+import "myagent/internal/handler"
+import "myagent/internal/runtime"
+import "myagent/internal/tool"
+import "myagent/pkg/llm"
+import "myagent/pkg/logger"
 
 var EmptyQueryErr = fmt.Errorf("empty user query")
 
@@ -50,11 +48,11 @@ func (a *Agent) InitAgentState(
 			ToolAskMode: runtime.ToolAskModeAuto,
 		},
 		SystemPrompt: systemPrompt,
-		UserQuery:  query,
-		InputChan:  input,
-		OutputChan: output,
-		LLMClient:  llmClient,
-		ToolMap:    registerTools(),
+		UserQuery:    query,
+		InputChan:    input,
+		OutputChan:   output,
+		LLMClient:    llmClient,
+		ToolMap:      registerTools(),
 	}
 
 	return nil
@@ -71,24 +69,48 @@ func (a *Agent) Exec(
 
 	logger.Debugf("[agentLoopCore] query: %v\n", query)
 
-	resp, err := a.agentHandler()
+	agentHandleChan := make(
+		chan struct {
+			Resp *runtime.AgentResponse
+			Err  error
+		},
+		1,
+	)
+	go func() {
+		data := struct {
+			Resp *runtime.AgentResponse
+			Err  error
+		}{}
+		data.Resp, data.Err = a.agentHandler(ctx)
+		agentHandleChan <- data
+	}()
 
-	if errors.Is(err, EmptyQueryErr) {
+	res := struct {
+		Resp *runtime.AgentResponse
+		Err  error
+	}{}
+	select {
+	case <-ctx.Done():
 		return
-	} else if err != nil {
+	case res = <-agentHandleChan:
+	}
+
+	if errors.Is(res.Err, EmptyQueryErr) {
+		return
+	} else if res.Err != nil {
 		output <- runtime.AgentResponse{
 			RespType: runtime.AgentRespTypeError,
-			Err:      fmt.Errorf("execute agent loop failed: %v", err),
+			Err:      fmt.Errorf("execute agent loop failed: %v", res.Err),
 		}
 	} else {
-		logger.Debugf("agent response: %v\n", resp)
-		output <- *resp
+		logger.Debugf("agent response: %v\n", *res.Resp)
+		output <- *res.Resp
 	}
 }
 
 // registerTools 返回所有工具的注册表
-// TODO: write-todo, write-memory
 func registerTools() map[string]tool.Tool {
+	// TODO: write-todo, write-memory
 	list_dir := &tool.ListDirTool{}
 
 	return map[string]tool.Tool{
@@ -96,13 +118,17 @@ func registerTools() map[string]tool.Tool {
 	}
 }
 
-func (a *Agent) agentHandler() (*runtime.AgentResponse, error) {
+func (a *Agent) agentHandler(ctx context.Context) (*runtime.AgentResponse, error) {
 	var err error
+
+	if err = ctx.Err(); err != nil {
+		return nil, err
+	}
 
 	if a.State.UserQuery == "" { // empty query
 		return nil, EmptyQueryErr
 	} else if strings.HasPrefix(a.State.UserQuery, "/") { // command
-		res, err := handler.HandleAgentCommand(&a.State)
+		res, err := handler.HandleAgentCommand(ctx, &a.State)
 		if err != nil {
 			return nil, err
 		}
@@ -110,12 +136,16 @@ func (a *Agent) agentHandler() (*runtime.AgentResponse, error) {
 			RespType:  runtime.AgentRespTypeCmd,
 			CmdResult: res,
 		}, nil
-	} else if a.State.Response.HasToolCalls() { // tool call
+	}
+
+	if a.State.Response.HasToolCalls() { // tool call
 		logger.Debugf("handle tool call: %v\n", a.State.UserQuery)
-		err = handler.HandleToolCall(&a.State)
+		err = handler.HandleToolCall(ctx, &a.State)
+
 	} else if a.State.UserQuery != "" { // normal query
 		logger.Debugf("handle query: %v\n", a.State.UserQuery)
-		err = handler.HandleQuery(a.Config, &a.State)
+		err = handler.HandleQuery(ctx, a.Config, &a.State)
+
 	} else { // invalid query
 		logger.Errorf("invalid LoopContext\n")
 		return nil, fmt.Errorf("invalid LoopContext")
@@ -127,6 +157,7 @@ func (a *Agent) agentHandler() (*runtime.AgentResponse, error) {
 
 	// TODO: append query from ctx.InputChan
 
+	// TODO: update usage && context size
 	if a.State.Response != nil &&
 		!a.State.Response.HasToolCalls() &&
 		a.State.Response.Content() != "" {
@@ -136,5 +167,5 @@ func (a *Agent) agentHandler() (*runtime.AgentResponse, error) {
 		}, nil
 	}
 
-	return a.agentHandler()
+	return a.agentHandler(ctx)
 }

@@ -1,13 +1,11 @@
 package logger
 
-import (
-	"fmt"
-	"os"
-	"path/filepath"
+import "fmt"
+import "os"
+import "path/filepath"
 
-	"go.uber.org/zap"
-	"go.uber.org/zap/zapcore"
-)
+import "go.uber.org/zap"
+import "go.uber.org/zap/zapcore"
 
 var (
 	logger      *zap.Logger = nil

@@ -1,28 +1,27 @@
 package handler
 
 import "fmt"
-import "time"
 import "context"
 
 import "myagent/internal/runtime"
 import "myagent/pkg/llm"
 import "myagent/pkg/logger"
 
-func HandleToolCall(ctx *runtime.AgentState) error {
+func HandleToolCall(ctx context.Context, state *runtime.AgentState) error {
 	idChanMap := map[llm.ToolCall]chan string{}
 
 	logger.Debugf("HandleToolCall Start >>>>>>>>>>>>>>>>\n")
 	logger.Debugf("[HandleToolCall] message (before):\n")
-	for _, message := range ctx.MessageParams {
+	for _, message := range state.MessageParams {
 		logger.Debugf("\tmessage: %+v\n", message)
 	}
 
-	for _, tc := range ctx.Response.ToolCalls() {
+	for _, tc := range state.Response.ToolCalls() {
 		logger.Infof("exec tool: %v\n", tc.Function.Name)
 		resCh := make(chan string)
 		idChanMap[tc] = resCh
 
-		tool, ok := ctx.ToolMap[tc.Function.Name]
+		tool, ok := state.ToolMap[tc.Function.Name]
 		if !ok {
 			return fmt.Errorf(
 				"tool %v(%v) not exists", tc.Function.Name, tc.ID,
@@ -41,40 +40,35 @@ func HandleToolCall(ctx *runtime.AgentState) error {
 			)
 		}
 
-		ctx.MessageParams = append(
-			ctx.MessageParams,
+		state.MessageParams = append(
+			state.MessageParams,
 			llm.ToolResultMessage(tc.ID, res),
 		)
 	}
 
-	timeoutCtx, cancel := context.WithTimeout(
-		context.Background(), 60*time.Second,
-	)
-	defer cancel()
-
-	resp, err := ctx.LLMClient.Chat(
-		timeoutCtx,
+	resp, err := state.LLMClient.Chat(
+		ctx,
 		llm.ChatRequest{
-			Messages:   ctx.MessageParams,
-			Tools:      ctx.ToolList(),
+			Messages:   state.MessageParams,
+			Tools:      state.ToolList(),
 		},
 	)
 	if err != nil {
 		return err
 	}
 
-	ctx.Response = resp
+	state.Response = resp
 	assistantMsg, ok := resp.Message()
 	if ok {
-		ctx.MessageParams = append(ctx.MessageParams, assistantMsg)
+		state.MessageParams = append(state.MessageParams, assistantMsg)
 	}
 
 	// fmt.Printf("[HandleToolCall] result: %v\n", ctx.Response.Content())
-	logger.Debugf("[HandleToolCall] HasToolCall: %v\n", ctx.Response.HasToolCalls())
+	logger.Debugf("[HandleToolCall] HasToolCall: %v\n", state.Response.HasToolCalls())
 
 
 	logger.Debugf("[HandleToolCall] message (after):\n")
-	for _, message := range ctx.MessageParams {
+	for _, message := range state.MessageParams {
 		logger.Debugf("\tmessage: %+v\n", message)
 	}
 	logger.Debugf("HandleToolCall Done <<<<<<<<<<<<<<<<\n\n")

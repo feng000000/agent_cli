@@ -1,8 +1,6 @@
 package tool
 
-import (
-	"myagent/pkg/llm"
-)
+import "myagent/pkg/llm"
 
 
 type Tool interface {

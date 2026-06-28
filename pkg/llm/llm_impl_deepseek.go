@@ -1,17 +1,15 @@
 package llm
 
-import (
-	"bytes"
-	"context"
-	"encoding/json"
-	"errors"
-	"fmt"
-	"io"
-	"net/http"
-	"os"
-	"strings"
-	"time"
-)
+import "bytes"
+import "context"
+import "encoding/json"
+import "errors"
+import "fmt"
+import "io"
+import "net/http"
+import "os"
+import "strings"
+import "time"
 
 const (
 	// DefaultDeepSeekBaseURL 是 DeepSeek OpenAI-compatible API 的默认地址.

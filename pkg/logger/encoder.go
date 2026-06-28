@@ -1,10 +1,8 @@
 package logger
 
-import (
-	"time"
+import "time"
 
-	"go.uber.org/zap/zapcore"
-)
+import "go.uber.org/zap/zapcore"
 
 // levelEncoder 定义日志级别的显示格式
 func levelEncoder(l zapcore.Level, enc zapcore.PrimitiveArrayEncoder) {

@@ -158,6 +158,9 @@ func (a *Agent) agentHandler(ctx context.Context) (*runtime.AgentResponse, error
 	// TODO: append query from ctx.InputChan
 
 	// TODO: update usage && context size
+
+	// TODO: async update storage
+
 	if a.State.Response != nil &&
 		!a.State.Response.HasToolCalls() &&
 		a.State.Response.Content() != "" {

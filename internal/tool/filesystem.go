@@ -13,15 +13,15 @@ type listDirArgs struct {
 	Path string `json:"path"`
 }
 
-func (t ListDirTool) Name() string {
+func (t *ListDirTool) Name() string {
 	return "list_directory"
 }
 
-func (t ListDirTool) Desc() string {
+func (t *ListDirTool) Desc() string {
 	return "list information about all files and folders within the directory"
 }
 
-func (t ListDirTool) Definition() *llm.Tool {
+func (t *ListDirTool) Definition() *llm.Tool {
 	return &llm.Tool{
 		Type: llm.ToolTypeFunction,
 		Function: llm.FunctionTool{
@@ -41,7 +41,7 @@ func (t ListDirTool) Definition() *llm.Tool {
 	}
 }
 
-func (t ListDirTool) Execute(args string, res chan string) {
+func (t *ListDirTool) Execute(args string, res chan string) {
 	go func() {
 		defer func() {
 			if r := recover(); r != nil {
@@ -52,7 +52,7 @@ func (t ListDirTool) Execute(args string, res chan string) {
 	}()
 }
 
-func (t ListDirTool) execute(arg string, res chan string) {
+func (t *ListDirTool) execute(arg string, res chan string) {
 	var args listDirArgs
 	if err := json.Unmarshal([]byte(arg), &args); err != nil {
 		res <- fmt.Sprintf("invalid arguments: %v", err)
@@ -109,15 +109,15 @@ type ReadFileArgs struct {
 	Path string `json:"path"`
 }
 
-func (t ReadFileTool) Name() string {
+func (t *ReadFileTool) Name() string {
 	return "read_file"
 }
 
-func (t ReadFileTool) Desc() string {
+func (t *ReadFileTool) Desc() string {
 	return "read the given path file, return the file content (string)"
 }
 
-func (t ReadFileTool) Definition() *llm.Tool {
+func (t *ReadFileTool) Definition() *llm.Tool {
 	return &llm.Tool{
 		Type: llm.ToolTypeFunction,
 		Function: llm.FunctionTool{
@@ -137,10 +137,10 @@ func (t ReadFileTool) Definition() *llm.Tool {
 	}
 }
 
-func (t ReadFileTool) Execute(args string, res chan string) {
+func (t *ReadFileTool) Execute(args string, res chan string) {
 	go t.execute(args, res)
 }
 
-func (t ReadFileTool) execute(arg string, res chan string) {
+func (t *ReadFileTool) execute(arg string, res chan string) {
 	// TODO: implement
 }

@@ -12,10 +12,8 @@
 // NO_NEW_PRIVS 由底层库(go-landlock / libseccomp)负责开启,无需显式设置。
 package confine
 
-import (
-	"fmt"
-	"runtime"
-)
+import "fmt"
+import "runtime"
 
 // Policy 描述施加的约束。零值表示最严:全盘只读、断网、强制 enforcement。
 type Policy struct {

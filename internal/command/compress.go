@@ -4,7 +4,6 @@ import "context"
 import "fmt"
 import "slices"
 
-import agentctx "myagent/internal/context"
 import "myagent/internal/runtime"
 
 type CompressCommand struct{}
@@ -21,7 +20,7 @@ func (c CompressCommand) Desc() string {
 // Exec
 func (c CompressCommand) Exec(
 	ctx context.Context,
-	state *runtime.AgentState,
+	state *runtime.Session,
 	args []string,
 ) (string, error) {
 	if len(args) > 1 {
@@ -31,22 +30,23 @@ func (c CompressCommand) Exec(
 	var mode string
 	if len(args) == 0 {
 		mode = "hybrid"
+	} else {
+		mode = args[0]
 	}
-	mode = args[0]
 
 	validMode := []string{"truncate", "summarize", "hybrid"}
-	if slices.Contains(validMode, mode) {
+	if !slices.Contains(validMode, mode) {
 		return "",
-			fmt.Errorf("invalid compress mode, except [truncate, summarize, hybrid], got %v", mode)
+			fmt.Errorf("invalid mode, except [%v], got %v", validMode, mode)
 	}
 
 	switch mode {
-	case "truncate":
-		(&agentctx.TruncateCompressor{}).Compress(ctx, state)
-	case "summarize":
-		(&agentctx.LLMCompressor{}).Compress(ctx, state)
-	case "hybrid":
-		(&agentctx.HybridCompressor{}).Compress(ctx, state)
+	case validMode[0]:
+		(&runtime.TruncateCompressor{}).Compress(ctx, state)
+	case validMode[1]:
+		(&runtime.LLMCompressor{}).Compress(ctx, state)
+	case validMode[2]:
+		(&runtime.HybridCompressor{}).Compress(ctx, state)
 	}
 
 	return "Context has been compressed", nil

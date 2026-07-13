@@ -2,10 +2,8 @@
 
 package confine
 
-import (
-	seccomp "github.com/seccomp/libseccomp-golang"
-	"golang.org/x/sys/unix"
-)
+import seccomp "github.com/seccomp/libseccomp-golang"
+import "golang.org/x/sys/unix"
 
 // applyNetwork 用 seccomp 禁止外联:在 socket() 上做参数级过滤,
 // 当地址族为 AF_INET / AF_INET6 时返回 EPERM,而放行 AF_UNIX,

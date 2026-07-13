@@ -41,34 +41,21 @@ func (t *ListDirTool) Definition() *llm.Tool {
 	}
 }
 
-func (t *ListDirTool) Execute(args string, res chan string) {
-	go func() {
-		defer func() {
-			if r := recover(); r != nil {
-				res <- fmt.Sprintf("exec tool panic: %v", r)
-			}
-		}()
-		t.execute(args, res)
-	}()
-}
-
-func (t *ListDirTool) execute(arg string, res chan string) {
+func (t *ListDirTool) Execute(arg string) string {
 	var args listDirArgs
 	if err := json.Unmarshal([]byte(arg), &args); err != nil {
-		res <- fmt.Sprintf("invalid arguments: %v", err)
-		return
+		return fmt.Sprintf("invalid arguments: %v", err)
 	}
 
 	path := strings.TrimSpace(args.Path)
 	if path == "" {
-		res <- "path is required"
-		return
+		return "path is required"
 	}
 
 	entries, err := os.ReadDir(path)
 	if err != nil {
-		res <- fmt.Sprintf("read directory failed: %v", err)
-		return
+		return fmt.Sprintf("read directory failed: %v", err)
+
 	}
 
 	names := make([]string, 0, len(entries))
@@ -77,8 +64,8 @@ func (t *ListDirTool) execute(arg string, res chan string) {
 		name := entry.Name()
 		info, err := entry.Info()
 		if err != nil {
-			res <- fmt.Sprintf("read entry info failed: %v", err)
-			return
+			return fmt.Sprintf("read entry info failed: %v", err)
+
 		}
 
 		filemode := info.Mode()
@@ -96,11 +83,11 @@ func (t *ListDirTool) execute(arg string, res chan string) {
 	}
 
 	if len(names) == 0 {
-		res <- "directory is empty"
-		return
+		return "directory is empty"
+
 	}
 
-	res <- strings.Join(names, "\n")
+	return strings.Join(names, "\n")
 }
 
 type ReadFileTool struct{}
@@ -137,10 +124,7 @@ func (t *ReadFileTool) Definition() *llm.Tool {
 	}
 }
 
-func (t *ReadFileTool) Execute(args string, res chan string) {
-	go t.execute(args, res)
-}
-
-func (t *ReadFileTool) execute(arg string, res chan string) {
+func (t *ReadFileTool) Execute(arg string) string {
 	// TODO: implement
+	return "not implemented"
 }

@@ -3,6 +3,7 @@ module myagent
 go 1.26.3
 
 require (
+	github.com/google/uuid v1.6.0
 	github.com/landlock-lsm/go-landlock v0.9.0
 	github.com/seccomp/libseccomp-golang v0.11.1
 	go.uber.org/zap v1.28.0

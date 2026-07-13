@@ -1,35 +1,61 @@
 package handler
 
 import "context"
+import "time"
 
-import "myagent/internal/config"
 import "myagent/internal/runtime"
 import "myagent/pkg/llm"
 import "myagent/pkg/logger"
 
-func HandleQuery(ctx context.Context, cfg config.ProjectConfig, state *runtime.AgentState) error {
+func HandleQuery(
+	ctx context.Context,
+	query string,
+	state *runtime.Session,
+	output chan *runtime.AgentResponse,
+) error {
 	logger.Infof("Handle query")
 
-	logger.Debugf("HandleQuery Start >>>>>>>>>>>>>>>>\n\n")
-	logger.Debugf("[HandleQuery] query: %v\n", state.UserQuery)
-	logger.Debugf("[HandleQuery] message (before):")
-	for _, message := range state.MessageParams {
-		logger.Debugf("\tmessage: %+v\n", message)
+	// DEBUG:
+	{
+		logger.Debugf("HandleQuery Start >>>>>>>>>>>>>>>>\n\n")
+		logger.Debugf("[HandleQuery] query: %v\n", query)
+		logger.Debugf("[HandleQuery] message (before):")
+		for _, message := range state.Messages {
+			logger.Debugf("\tmessage: %+v\n", message)
+		}
 	}
+	state.Messages = append(state.Messages, llm.UserMessage(query))
 
-	messages := []llm.Message{
-		llm.SystemMessage(state.SystemPrompt),
-		llm.UserMessage(state.UserQuery),
-	}
+	var gotRespCh chan bool = make(chan bool)
+	go func() {
+		ticker := time.NewTicker(1 * time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-gotRespCh:
+				output <- &runtime.AgentResponse{
+					RespType:      runtime.AgentRespTypeMiddleMsg,
+					MiddleMessage: "got llm resp",
+				}
+				return
+			case <-ticker.C:
+				output <- &runtime.AgentResponse{
+					RespType:      runtime.AgentRespTypeMiddleMsg,
+					MiddleMessage: "waiting",
+				}
+			}
+		}
+	}()
 
 	resp, err := state.LLMClient.Chat(
 		ctx,
 		llm.ChatRequest{
-			Messages:   messages,
+			Messages:   state.Messages,
 			Tools:      state.ToolList(),
 			ToolChoice: llm.ToolChoiceAuto,
 		},
 	)
+	gotRespCh <- true
 
 	// DEBUG:
 	if !resp.HasToolCalls() {
@@ -56,18 +82,18 @@ func HandleQuery(ctx context.Context, cfg config.ProjectConfig, state *runtime.A
 
 	assistantMsg, ok := resp.Message()
 	if ok {
-		state.MessageParams = append(state.MessageParams, assistantMsg)
+		state.Messages = append(state.Messages, assistantMsg)
 	}
 
 	logger.Debugf("[HandleQuery] message (after):\n")
-	for _, message := range state.MessageParams {
+	for _, message := range state.Messages {
 		logger.Debugf("\tmessage: %+v\n", message)
 	}
 	logger.Debugf("HandleQuery Done <<<<<<<<<<<<<<<<\n\n")
 
-	lastMsg := state.MessageParams[len(state.MessageParams)-1]
+	lastMsg := state.Messages[len(state.Messages)-1]
 	if lastMsg.ReasoningContent != "" {
-		state.OutputChan <- runtime.AgentResponse{
+		output <- &runtime.AgentResponse{
 			RespType:      runtime.AgentRespTypeMiddleMsg,
 			MiddleMessage: lastMsg.ReasoningContent,
 		}

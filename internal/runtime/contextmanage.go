@@ -1,4 +1,4 @@
-package context
+package runtime
 
 import "context"
 import _ "embed"
@@ -8,40 +8,42 @@ import "strings"
 import "text/template"
 import "time"
 
-import "myagent/internal/config"
-import "myagent/internal/runtime"
 import "myagent/pkg/llm"
 
 //go:embed prompts/system_prompt.md
 var systemPromptTemplate string
 
-// TODO: 确定 skill 结构, 注入 skill 描述
-func GetSystemPrompt(cfg config.ProjectConfig) (string, error) {
+func getSystemPrompt(workspace *Persistence) (string, error) {
 	tmpl, err := template.New("system").Parse(systemPromptTemplate)
 	if err != nil {
 		return "", err
 	}
 
-	memoryData, err := os.ReadFile(cfg.Workspace.MemoryPath)
-	userInfoData, err := os.ReadFile(cfg.Workspace.UserInfoPath)
+	workingDir, err:= os.Getwd()
+
+	// TODO: Global Memory
+	memoryData, err := os.ReadFile(workspace.MemoryPath)
+	userInfoData, err := os.ReadFile(workspace.UserInfoPath)
 
 	sb := strings.Builder{}
 	tmpl.Execute(
 		&sb,
 		map[string]string{
 			"Date":      time.Now().Format(time.DateOnly),
-			"Workspace": cfg.Workspace.WorkspaceDir,
+			"WorkingDir": workingDir,
 			"Memory":    string(memoryData),
 			"UserInfo":  string(userInfoData),
-			"SkillDir":  cfg.Workspace.SkillDir,
+			"SkillDir":  workspace.SkillDir,
 		},
 	)
+
+	// TODO: 注入 skill 描述
 
 	return sb.String(), nil
 }
 
 type Compressor interface {
-	Compress(ctx context.Context, state *runtime.AgentState) error
+	Compress(ctx context.Context, state *Session) error
 }
 
 //go:embed prompts/compress_system_prompt.md
@@ -51,13 +53,13 @@ var compressSystemPrompt string
 type LLMCompressor struct{}
 
 func (lc *LLMCompressor) Compress(
-	ctx context.Context, state *runtime.AgentState,
+	ctx context.Context, state *Session,
 ) error {
 	resp, err := state.LLMClient.Chat(
 		ctx,
 		llm.ChatRequest{
 			Messages: append(
-				state.MessageParams,
+				state.Messages,
 				llm.UserMessage(compressSystemPrompt),
 			),
 		},
@@ -70,7 +72,7 @@ func (lc *LLMCompressor) Compress(
 		"<history_context_summary>%s</history_context_summary>",
 		resp.Content(),
 	)
-	state.MessageParams = []llm.Message{llm.AssistantMessage(summary)}
+	state.Messages = []llm.Message{llm.AssistantMessage(summary)}
 
 	return nil
 }
@@ -112,13 +114,13 @@ func (tc *TruncateCompressor) splitCompressMessages(
 }
 
 func (tc *TruncateCompressor) Compress(
-	ctx context.Context, state *runtime.AgentState,
+	ctx context.Context, state *Session,
 ) error {
-	sysPrompt, messages := tc.extractSystemPrompt(state.MessageParams)
+	sysPrompt, messages := tc.extractSystemPrompt(state.Messages)
 	_, kept := tc.splitCompressMessages(messages)
 
 	// system prompt + kept messages
-	state.MessageParams = append([]llm.Message{*sysPrompt}, kept...)
+	state.Messages = append([]llm.Message{*sysPrompt}, kept...)
 
 	return nil
 }
@@ -131,18 +133,18 @@ type HybridCompressor struct {
 
 func (hc *HybridCompressor) Compress(
 	ctx context.Context,
-	state *runtime.AgentState,
+	state *Session,
 ) error {
-	sysPrompt, messages := hc.extractSystemPrompt(state.MessageParams)
+	sysPrompt, messages := hc.extractSystemPrompt(state.Messages)
 	toCompress, kept := hc.splitCompressMessages(messages)
 
-	state.MessageParams = toCompress
+	state.Messages = toCompress
 
 	(&LLMCompressor{}).Compress(ctx, state)
 
 	// system prompt + compressed messages + kept messages
-	state.MessageParams = append(
-		append([]llm.Message{*sysPrompt}, state.MessageParams...),
+	state.Messages = append(
+		append([]llm.Message{*sysPrompt}, state.Messages...),
 		kept...,
 	)
 

@@ -14,7 +14,7 @@ type AgentCommand interface {
 	// Exec 执行命令
 	Exec(
 		ctx context.Context,
-		state *runtime.AgentState,
+		state *runtime.Session,
 		args []string,
 	) (string, error)
 }
@@ -38,9 +38,10 @@ type ClientCommand interface {
 // TODO: more command
 var agentCmdRegistry = map[string]AgentCommand{
 	"ciallo": CialloCommand{},
+	"compress": CompressCommand{},
+	"stop": StopCommand{},
 }
 var clientCmdRegistry = map[string]ClientCommand{
-	"stop": StopCommand{},
 }
 
 func GetAgentCommand(name string) AgentCommand {

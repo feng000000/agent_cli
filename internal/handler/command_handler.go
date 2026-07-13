@@ -1,13 +1,12 @@
 package handler
 
-import (
-	"context"
-	"fmt"
-	"myagent/internal/command"
-	"myagent/internal/runtime"
-	"myagent/pkg/logger"
-	"strings"
-)
+import "context"
+import "fmt"
+import "strings"
+
+import "myagent/internal/command"
+import "myagent/internal/runtime"
+import "myagent/pkg/logger"
 
 var SkipHandleCommand = fmt.Errorf("skip command")
 
@@ -47,9 +46,10 @@ func HandleClientCommand(
 // HandleAgentCommand 处理Agent运行时的命令
 func HandleAgentCommand(
 	ctx context.Context,
-	state *runtime.AgentState,
+	state *runtime.Session,
+	query string,
 ) (string, error) {
-	cmdInput, err := splitCommand(state.UserQuery)
+	cmdInput, err := splitCommand(query)
 	if err != nil {
 		return "", err
 	}
@@ -60,7 +60,7 @@ func HandleAgentCommand(
 	}
 
 	logger.Debugf("call command %v\n", cmd.Name())
-	res, err := cmd.Exec(ctx,state, cmdInput.Args)
+	res, err := cmd.Exec(ctx, state, cmdInput.Args)
 	if err != nil {
 		return "", err
 	}

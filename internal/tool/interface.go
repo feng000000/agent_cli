@@ -15,5 +15,5 @@ type Tool interface {
 
 	// Execute 执行工具;
 	// arg 为json字符串, 解析结果通过 res channel 传递
-	Execute(args string, res chan string)
+	Execute(arg string) string
 }

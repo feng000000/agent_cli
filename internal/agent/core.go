@@ -1,74 +1,76 @@
 package agent
 
-import "context"
-import "errors"
 import "fmt"
-import "strings"
 
-import "myagent/internal/config"
-import agentctx "myagent/internal/context"
 import "myagent/internal/handler"
 import "myagent/internal/runtime"
-import "myagent/internal/tool"
-import "myagent/pkg/llm"
 import "myagent/pkg/logger"
 
-var EmptyQueryErr = fmt.Errorf("empty user query")
+// Exec 调用 agent
+func Exec(
+	a *Agent,
+	firstInput *runtime.UserInput,
+) {
+	if a.Session == nil {
+		logger.Panicf("AgentState not initialized")
+	}
+
+	// run agent
+	if res, err := a.runAgent(firstInput); err != nil {
+		a.OutputChan <- &runtime.AgentResponse{
+			RespType: runtime.AgentRespTypeError,
+			Err:      fmt.Errorf("execute agent loop failed: %v", err),
+		}
+	} else { // got a response
+		logger.Debugf("agent response: %v\n", *res)
+		a.OutputChan <- res
+	}
+
+}
+
+func NewAgent(
+	input *runtime.MessageQueue,
+	output chan *runtime.AgentResponse,
+	sessionID string,
+) (*Agent, error) {
+	if input == nil {
+		input = runtime.NewMessageQueue()
+	}
+	if output == nil {
+		output = make(chan *runtime.AgentResponse, 65536)
+	}
+
+	var session *runtime.Session
+	var err error
+	if sessionID != "" {
+		session, err = runtime.LoadSession(sessionID)
+	} else {
+		session, err = runtime.NewSession()
+	}
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &Agent{
+		MessageQueue: input,
+		OutputChan:   output,
+		Session:      session,
+	}, nil
+
+}
 
 type Agent struct {
-	Config config.ProjectConfig
-	State  runtime.AgentState
+	// MessageQueue 可以直接获取追加信息
+	MessageQueue *runtime.MessageQueue
+	// OutputChan emit ACP 事件
+	OutputChan chan *runtime.AgentResponse
+
+	Session *runtime.Session
 }
 
-func (a *Agent) InitAgentState(
-	ctx context.Context,
-	query string,
-	input chan string,
-	output chan runtime.AgentResponse,
-) error {
-	llmClient, err := llm.NewDeepSeekClient(
-		llm.DeepSeekConfig{
-			APIKey:  a.Config.LLM.APIKey,
-			BaseURL: a.Config.LLM.BaseURL,
-			Model:   a.Config.LLM.Model,
-		},
-	)
-	if err != nil {
-		panic(err)
-	}
-	systemPrompt, err := agentctx.GetSystemPrompt(a.Config)
-	if err != nil {
-		panic(err)
-	}
-
-	a.State = runtime.AgentState{
-		Ctx: ctx,
-		AgentConfig: runtime.AgentConfig{
-			AgentMode:   runtime.AgentModePlan,
-			ToolAskMode: runtime.ToolAskModeAuto,
-		},
-		SystemPrompt: systemPrompt,
-		UserQuery:    query,
-		InputChan:    input,
-		OutputChan:   output,
-		LLMClient:    llmClient,
-		ToolMap:      registerTools(),
-	}
-
-	return nil
-}
-
-// Exec 执行一次 agent 流程
-func (a *Agent) Exec(
-	ctx context.Context,
-	query string,
-	input chan string,
-	output chan runtime.AgentResponse,
-) {
-	a.InitAgentState(ctx, query, input, output)
-
-	logger.Debugf("[agentLoopCore] query: %v\n", query)
-
+// runAgent 调用 agentHandler, 同时监听 ctx 的取消信号
+func (a *Agent) runAgent(firstInput *runtime.UserInput) (*runtime.AgentResponse, error) {
 	agentHandleChan := make(
 		chan struct {
 			Resp *runtime.AgentResponse
@@ -77,11 +79,32 @@ func (a *Agent) Exec(
 		1,
 	)
 	go func() {
+		// empty query or command
+		{
+			if firstInput == nil || len(firstInput.Content) == 0 { // empty query
+				return
+			} else if firstInput.Type() == runtime.InputTypeCommand { // command
+				res, err := handler.HandleAgentCommand(
+					a.Session.Ctx,
+					a.Session,
+					string(firstInput.Content),
+				)
+				if err != nil {
+					return
+				}
+				a.OutputChan <- &runtime.AgentResponse{
+					RespType:  runtime.AgentRespTypeCmd,
+					CmdResult: res,
+				}
+				return
+			}
+		}
+
 		data := struct {
 			Resp *runtime.AgentResponse
 			Err  error
 		}{}
-		data.Resp, data.Err = a.agentHandler(ctx)
+		data.Resp, data.Err = a.agentHandler(string(firstInput.Content))
 		agentHandleChan <- data
 	}()
 
@@ -90,85 +113,69 @@ func (a *Agent) Exec(
 		Err  error
 	}{}
 	select {
-	case <-ctx.Done():
-		return
+	case <-a.Session.Ctx.Done():
+		return nil, fmt.Errorf("agent handler canceled")
 	case res = <-agentHandleChan:
 	}
 
-	if errors.Is(res.Err, EmptyQueryErr) {
-		return
-	} else if res.Err != nil {
-		output <- runtime.AgentResponse{
-			RespType: runtime.AgentRespTypeError,
-			Err:      fmt.Errorf("execute agent loop failed: %v", res.Err),
-		}
-	} else {
-		logger.Debugf("agent response: %v\n", *res.Resp)
-		output <- *res.Resp
-	}
+	return res.Resp, res.Err
 }
 
-// registerTools 返回所有工具的注册表
-func registerTools() map[string]tool.Tool {
-	// TODO: write-todo, write-memory
-	list_dir := &tool.ListDirTool{}
-
-	return map[string]tool.Tool{
-		list_dir.Name(): list_dir,
-	}
-}
-
-func (a *Agent) agentHandler(ctx context.Context) (*runtime.AgentResponse, error) {
-	var err error
-
-	if err = ctx.Err(); err != nil {
-		return nil, err
-	}
-
-	if a.State.UserQuery == "" { // empty query
-		return nil, EmptyQueryErr
-	} else if strings.HasPrefix(a.State.UserQuery, "/") { // command
-		res, err := handler.HandleAgentCommand(ctx, &a.State)
-		if err != nil {
-			return nil, err
+// agentHandler 运行一次 agent 直到发生错误或产生最终结果
+func (a *Agent) agentHandler(query string) (*runtime.AgentResponse, error) {
+	first := true
+	for {
+		if a.Session == nil {
+			return nil, fmt.Errorf("AgentState is nil")
 		}
-		return &runtime.AgentResponse{
-			RespType:  runtime.AgentRespTypeCmd,
-			CmdResult: res,
-		}, nil
+
+		// route
+		{
+			var err error
+
+			if !first &&
+				a.Session.Response != nil &&
+				a.Session.Response.HasToolCalls() { // tool call
+
+				logger.Debugf("handle tool call: %v\n", query)
+				err = handler.HandleToolCall(
+					a.Session.Ctx,
+					a.Session,
+					a.MessageQueue,
+				)
+
+			} else if query != "" { // normal query
+
+				logger.Debugf("handle query: %v\n", query)
+				err = handler.HandleQuery(
+					a.Session.Ctx,
+					query,
+					a.Session,
+					a.OutputChan,
+				)
+
+			} else {
+				err = fmt.Errorf("invalid context (empty tool call and query)")
+			}
+
+			if err != nil {
+				return nil, err
+			}
+		}
+		// TODO: update usage && context size
+
+		// TODO: async update local storage(session)
+
+		if a.Session.Response != nil && !a.Session.Response.HasToolCalls() {
+			if a.Session.Response.Content() != "" {
+				return &runtime.AgentResponse{
+					RespType:    runtime.AgentRespTypeLLM,
+					LLMResponse: a.Session.Response,
+				}, nil
+			}
+			return nil, fmt.Errorf("LLM empty response")
+		}
+
+		first = false
 	}
-
-	if a.State.Response.HasToolCalls() { // tool call
-		logger.Debugf("handle tool call: %v\n", a.State.UserQuery)
-		err = handler.HandleToolCall(ctx, &a.State)
-
-	} else if a.State.UserQuery != "" { // normal query
-		logger.Debugf("handle query: %v\n", a.State.UserQuery)
-		err = handler.HandleQuery(ctx, a.Config, &a.State)
-
-	} else { // invalid query
-		logger.Errorf("invalid LoopContext\n")
-		return nil, fmt.Errorf("invalid LoopContext")
-	}
-
-	if err != nil {
-		return nil, err
-	}
-
-	// TODO: append query from ctx.InputChan
-
-	// TODO: update usage && context size
-
-	// TODO: async update storage
-
-	if a.State.Response != nil &&
-		!a.State.Response.HasToolCalls() &&
-		a.State.Response.Content() != "" {
-		return &runtime.AgentResponse{
-			RespType:    runtime.AgentRespTypeLLM,
-			LLMResponse: a.State.Response,
-		}, nil
-	}
-
-	return a.agentHandler(ctx)
 }

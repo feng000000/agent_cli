@@ -72,10 +72,8 @@ func main() {
 
 			// 这里替换成真实工具执行逻辑
 			// toolResult := "杭州当前气温 28°C，多云。"
-			res := make(chan string)
-			go listDirTool.Execute(tc.Function.Arguments, res)
+			toolResult := listDirTool.Execute(tc.Function.Arguments)
 
-			toolResult := <- res
 
 			fmt.Printf("tool result: %v\n", toolResult)
 

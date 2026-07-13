@@ -17,9 +17,11 @@ func (c StopCommand) Desc() string {
 // Exec 停止Agent 运行
 func (c StopCommand) Exec(
 	ctx context.Context,
-	state *runtime.ClientState,
+	state *runtime.Session,
 	args []string,
 ) (string, error) {
-	state.CancelFunc()
-	return "", nil
+	// state.Cancel()
+	// return fmt.Sprintf("stop session %v", state.Meta.SessionID), nil
+	// TODO: 只停止一次
+	return "not implemented", nil
 }

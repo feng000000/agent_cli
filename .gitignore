@@ -1,4 +1,5 @@
 **/.vscode/
+**/.myagent/
 
 .test*
 
@@ -6,3 +7,4 @@ config.json
 config.jsonc
 
 workspace/
+test.go

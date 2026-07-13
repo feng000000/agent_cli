@@ -20,7 +20,7 @@ func (c CialloCommand) Desc() string {
 // Exec 输出mock数据
 func (c CialloCommand) Exec(
 	ctx context.Context,
-	state *runtime.AgentState,
+	state *runtime.Session,
 	args []string,
 ) (string, error) {
 	logger.Debugf("Exec ciallo, prepare to sleep\n")

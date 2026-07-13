@@ -5,29 +5,44 @@ import "context"
 import "errors"
 import "fmt"
 import "io"
-import "strings"
 
 import "myagent/internal/handler"
 import "myagent/internal/runtime"
 import "myagent/pkg/logger"
 
-func StartSimpleUI(a Agent, input io.Reader, output io.Writer) error {
-	ich := make(chan string)
-	och := make(chan runtime.AgentResponse)
-	go readMessage(input, ich)
+func StartSimpleUI(
+	input io.Reader,
+	output io.Writer,
+	sessionID string,
+) error {
+	msgQueue := runtime.NewMessageQueue()
+	och := make(chan *runtime.AgentResponse, 65536) // emit 事件容量
+	go readMessage(input, msgQueue)
 	go outputMessage(output, och)
+
+
+	a, err := NewAgent(msgQueue, och, sessionID)
+	if err != nil {
+		return err
+	}
 
 	for {
 		logger.Debugf("test\n")
 		fmt.Fprint(output, "User>")
 
-		query := <-ich
-
 		ctx, cancel := context.WithCancel(context.Background())
-		clientState := runtime.ClientState{CancelFunc: cancel}
+		clientState := &runtime.ClientState{CancelFunc: cancel}
 
-		if strings.HasPrefix(query, "/") {
-			res, err := handler.HandleClientCommand(ctx, &clientState, query)
+
+		userInput := msgQueue.GetInput()
+
+		// check client command
+		if userInput.Type() == runtime.InputTypeCommand {
+			res, err := handler.HandleClientCommand(
+				ctx,
+				clientState,
+				string(userInput.Content),
+			)
 			if err == nil {
 				logger.Debugf("exec client command: %v %v", res, err)
 				fmt.Fprintf(output, "|🔧: %s\n", res)
@@ -35,18 +50,15 @@ func StartSimpleUI(a Agent, input io.Reader, output io.Writer) error {
 			} else if !errors.Is(err, handler.SkipHandleCommand) {
 				fmt.Fprintf(output, ">>>❗Error: %s\n", err.Error())
 			}
-			// skip
 		}
 
-		go a.Exec(ctx, query, ich, och)
+		go Exec(a, userInput)
 	}
 
 }
 
-// TODO: 终端输入\r分割
-// TODO: api
 // readMessage 读取消息 r -> ch
-func readMessage(r io.Reader, ch chan string) {
+func readMessage(r io.Reader, queue *runtime.MessageQueue) {
 	delimiter := []byte("\n")
 	// fmt.Printf("| delimiter: (%v)\n", delimiter)
 
@@ -59,7 +71,9 @@ func readMessage(r io.Reader, ch chan string) {
 
 			if bytes.HasSuffix(data, delimiter) {
 				data = data[:len(data)-len(delimiter)]
-				ch <- string(data)
+
+				queue.Push(&runtime.UserInput{Content: data})
+
 				data = data[:0]
 			}
 		}
@@ -71,7 +85,7 @@ func readMessage(r io.Reader, ch chan string) {
 }
 
 // outputMessage 打印信息 ch -> w
-func outputMessage(w io.Writer, ch chan runtime.AgentResponse) {
+func outputMessage(w io.Writer, ch chan *runtime.AgentResponse) {
 	for content := range ch {
 		switch content.RespType {
 		case runtime.AgentRespTypeLLM:

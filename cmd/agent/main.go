@@ -2,6 +2,7 @@ package main
 
 import "log"
 import "os"
+import "flag"
 
 import "myagent/internal/agent"
 import "myagent/internal/config"
@@ -19,12 +20,13 @@ func main() {
 	}
 	defer logger.Sync()
 
+	var sessionID string
 
-	a := agent.Agent{
-		Config: cfg,
-	}
+	flag.StringVar(&sessionID, "r", "", "session id")
+	flag.Parse()
 
-	if agent.StartSimpleUI(a, os.Stdin, os.Stdout) != nil {
+	logger.Debugf("got session param: %v\n", sessionID)
+	if agent.StartSimpleUI(os.Stdin, os.Stdout, sessionID) != nil {
 		log.Fatalf("%v", err)
 	}
 }

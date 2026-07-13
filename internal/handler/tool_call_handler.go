@@ -57,6 +57,7 @@ func HandleToolCall(
 			)
 		}
 
+		logger.Debugf("tool %v result: %v\n", tc.Function.Name, res)
 		state.Messages = append(
 			state.Messages,
 			llm.ToolResultMessage(tc.ID, res),

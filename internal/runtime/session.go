@@ -1,9 +1,7 @@
 package runtime
 
 import "os"
-import "bufio"
 import "context"
-import "fmt"
 import "path"
 import "encoding/json"
 
@@ -40,21 +38,25 @@ type LLMConfig struct {
 }
 
 type Meta struct {
-	SessionID string `json:"session_id"`
+	SessionID   string        `json:"session_id"`
+	Persistence *Persistence  `json:"persistence"`
+	LLM         LLMConfig     `json:"llm"`
+	AgentMode   AgentModeEnum `json:"agent_mode"`
 
-	Persistence *Persistence         `json:"persistence"`
-	LLM         LLMConfig            `json:"llm"`
-	AgentMode   AgentModeEnum        `json:"agent_mode"`
-	ToolMap     map[string]tool.Tool `json:"tool_map"`
+	ToolMap map[string]tool.Tool `json:"-"`
 }
 
 func newMeta() *Meta {
-	list_dir := &tool.ListDirTool{}
+	// TODO: default tools
+	listDir := &tool.ListDirTool{}
+	readFile := &tool.ReadFileTool{}
+
 	return &Meta{
 		SessionID: uuid.NewString(),
 		AgentMode: AgentModePlan,
 		ToolMap: map[string]tool.Tool{
-			list_dir.Name(): list_dir,
+			listDir.Name():  listDir,
+			readFile.Name(): readFile,
 		},
 		Persistence: &Persistence{
 			PersistenceDir: "./.myagent/persistence",
@@ -91,16 +93,15 @@ func (s *Session) ToolList() []llm.Tool {
 	return toolList
 }
 
-func serializeJson(path string, data ...any) error {
-	fullData := []byte{}
-	for d := range data {
-		jsonBytes, err := json.MarshalIndent(d, "", "    ")
-		if err != nil {
-			return err
-		}
-		fullData = append(fullData, jsonBytes...)
+func serializeJson(path string, data any) error {
+	jsonBytes, err := json.MarshalIndent(data, "", "    ")
+	if err != nil {
+		return err
 	}
-	err := os.WriteFile(path, fullData, 0644)
+
+	if jsonBytes != nil {
+		err = os.WriteFile(path, jsonBytes, 0644)
+	}
 	if err != nil {
 		return err
 	}
@@ -120,15 +121,16 @@ func (s *Session) Save() error {
 	serializeJson(metaPath, s.Meta)
 
 	messagePath := path.Join(sessionDir, "history.jsonl")
-	messages := make([]any, len(s.Messages))
-	serializeJson(messagePath, messages...)
 
-	return fmt.Errorf("saveState not implemented")
+	// TODO: 追加写入历史
+	serializeJson(messagePath, s.Messages)
+
+	return nil
 }
 
 // LoadSession 从磁盘 恢复 AgentSession
 func LoadSession(sessionID string) (*Session, error) {
-	// TODO: implement LoadState, 可从 内存registry -> 磁盘 分级读
+	// TODO: 可从 内存registry -> 磁盘 分级读
 
 	sessionDir := path.Join(SessionDirBase, sessionID)
 	logger.Debugf("load state from %v", sessionDir)
@@ -171,37 +173,21 @@ func LoadSession(sessionID string) (*Session, error) {
 	messages := []llm.Message{llm.SystemMessage(systemPrompt)}
 	func() {
 		messagePath := path.Join(sessionDir, "history.jsonl")
-		// 打开 JSONL 文件
+
 		file, err := os.Open(messagePath)
 		if err != nil {
 			return
 		}
 		defer file.Close()
 
-		// 使用 bufio 按行扫描
-		scanner := bufio.NewScanner(file)
-		for scanner.Scan() {
-			line := scanner.Bytes()
+		decoder := json.NewDecoder(file)
 
-			// 跳过空行或注释
-			if len(line) == 0 {
-				continue
-			}
-
-			// 解析 JSON 数据
-			var message llm.Message
-			if err := json.Unmarshal(line, &message); err != nil {
-				logger.Warnf("load message err: %v\n", err)
-				continue
-			}
-
-			messages = append(messages, message)
-		}
-
-		if err := scanner.Err(); err != nil {
+		if err := decoder.Decode(&messages); err != nil {
 			logger.Warnf("load history message failed: %v", err)
 		}
 	}()
+
+	logger.Debugf("loaded messages: %v", messages)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	return &Session{
@@ -210,7 +196,7 @@ func LoadSession(sessionID string) (*Session, error) {
 		Meta:         meta,
 		LLMClient:    llmClient,
 		SystemPrompt: systemPrompt,
-		Messages:     []llm.Message{llm.SystemMessage(systemPrompt)},
+		Messages:     messages,
 	}, nil
 }
 

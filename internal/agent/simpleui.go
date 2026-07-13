@@ -23,6 +23,7 @@ func StartSimpleUI(
 
 	a, err := NewAgent(msgQueue, och, sessionID)
 	if err != nil {
+		fmt.Printf("NewAgent failed: %v\n", err)
 		return err
 	}
 
@@ -90,6 +91,7 @@ func outputMessage(w io.Writer, ch chan *runtime.AgentResponse) {
 		switch content.RespType {
 		case runtime.AgentRespTypeLLM:
 			fmt.Fprintf(w, "Agent✨> %s\n", content.LLMResponse.Content())
+			fmt.Fprintf(w, "<finished>\n")
 		case runtime.AgentRespTypeError:
 			fmt.Fprintf(w, ">>>❗Error: %s\n", content.Err.Error())
 		case runtime.AgentRespTypeMiddleMsg:

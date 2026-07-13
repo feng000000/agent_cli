@@ -58,6 +58,7 @@ func (t *ListDirTool) Execute(arg string) string {
 
 	}
 
+	// list dir
 	names := make([]string, 0, len(entries))
 	limit := 200
 	for _, entry := range entries {
@@ -124,7 +125,27 @@ func (t *ReadFileTool) Definition() *llm.Tool {
 	}
 }
 
+// TODO: 封装解析参数操作
+// TODO: 空返回在外部统一处理, 空返回导致 deepseek api 报错
 func (t *ReadFileTool) Execute(arg string) string {
-	// TODO: implement
-	return "not implemented"
+	var args ReadFileArgs
+	if err := json.Unmarshal([]byte(arg), &args); err != nil {
+		return fmt.Sprintf("invalid arguments: %v", err)
+	}
+
+	path := strings.TrimSpace(args.Path)
+	if path == "" {
+		return "path is required"
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return fmt.Sprintf("error: %v", err)
+	}
+
+	res := string(data)
+	if res == "" {
+		res = "<empty file>"
+	}
+	return res
 }

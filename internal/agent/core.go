@@ -164,7 +164,7 @@ func (a *Agent) agentHandler(query string) (*runtime.AgentResponse, error) {
 		}
 		// TODO: update usage && context size
 
-		// TODO: async update local storage(session)
+		a.Session.Save()
 
 		if a.Session.Response != nil && !a.Session.Response.HasToolCalls() {
 			if a.Session.Response.Content() != "" {

@@ -123,6 +123,19 @@ func (a *Agent) runAgent(firstInput *runtime.UserInput) (*runtime.AgentResponse,
 
 // agentHandler 运行一次 agent 直到发生错误或产生最终结果
 func (a *Agent) agentHandler(query string) (*runtime.AgentResponse, error) {
+	defer func() {
+		// compressor := runtime.LLMCompressor{}
+		// compressor := runtime.TruncateCompressor{TopK: 10}
+		compressor := runtime.HybridCompressor{TopK: 10}
+		if a.Session.ContextSize >= a.Session.Meta.MaxTokensToCompress {
+			logger.Infof(
+				"Context size over limit (%v), exec Compress\n",
+				a.Session.ContextSize,
+			)
+			compressor.Compress(a.Session.Ctx, a.Session)
+		}
+	}()
+
 	first := true
 	for {
 		if a.Session == nil {
@@ -162,7 +175,14 @@ func (a *Agent) agentHandler(query string) (*runtime.AgentResponse, error) {
 				return nil, err
 			}
 		}
-		// TODO: update usage && context size
+		// update usage (context size == )
+		if a.Session != nil && a.Session.Response != nil {
+			a.Session.Usage.Append(a.Session.Response.Usage)
+
+			// update context size
+			a.Session.ContextSize = a.Session.Response.Usage.PromptTokens +
+				a.Session.Response.Usage.CompletionTokens
+		}
 
 		a.Session.Save()
 

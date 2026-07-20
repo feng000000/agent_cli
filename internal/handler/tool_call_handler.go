@@ -34,7 +34,6 @@ func HandleToolCall(
 			)
 		}
 
-		// TODO: 检查 permission, emit tool call event
 		go func() {
 			defer func() {
 				if r := recover(); r != nil {
@@ -76,8 +75,7 @@ func HandleToolCall(
 	}
 
 	// request LLM
-	// TODO: call LLM, update state.Response, update state.MessageParam 封装到一起
-	// 还有 update usage && context size
+	// TODO: 封装 call LLM: update state.Response, update state.MessageParam, update usage, context size
 	{
 		req := llm.ChatRequest{
 			Messages: state.Messages,

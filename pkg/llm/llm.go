@@ -123,6 +123,17 @@ type Usage struct {
 	CompletionDetails     CompletionTokenDetails `json:"completion_tokens_details"`
 }
 
+// Append 用于累加 Usage
+func (u *Usage) Append(otherUsage Usage) {
+	u.PromptTokens += otherUsage.PromptTokens
+	u.CompletionTokens += otherUsage.CompletionTokens
+	u.TotalTokens += otherUsage.TotalTokens
+	u.PromptCacheHitTokens += otherUsage.PromptCacheHitTokens
+	u.PromptCacheMissTokens += otherUsage.PromptCacheMissTokens
+	u.CompletionDetails.ReasoningTokens += otherUsage.CompletionDetails.ReasoningTokens
+
+}
+
 // CompletionTokenDetails 表示生成 token 的细分用量.
 type CompletionTokenDetails struct {
 	ReasoningTokens int `json:"reasoning_tokens"`

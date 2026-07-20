@@ -61,3 +61,8 @@ func GetClientCommand(name string) ClientCommand {
 
 	return cmd
 }
+
+
+// TODO: command decorator: include
+// log, sandbox, panic recover,
+// emit tool call event, empty response, long response(save to file system)

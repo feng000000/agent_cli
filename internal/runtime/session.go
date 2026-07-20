@@ -38,10 +38,11 @@ type LLMConfig struct {
 }
 
 type Meta struct {
-	SessionID   string        `json:"session_id"`
-	Persistence *Persistence  `json:"persistence"`
-	LLM         LLMConfig     `json:"llm"`
-	AgentMode   AgentModeEnum `json:"agent_mode"`
+	SessionID           string        `json:"session_id"`
+	LLM                 LLMConfig     `json:"llm"`
+	AgentMode           AgentModeEnum `json:"agent_mode"`
+	MaxTokensToCompress int           `json:"max_tokens_to_compress"`
+	Persistence         *Persistence  `json:"persistence"`
 
 	ToolMap map[string]tool.Tool `json:"-"`
 }
@@ -75,8 +76,11 @@ type Session struct {
 
 	Meta *Meta
 
-	LLMClient    llm.LLMClient
-	SystemPrompt string
+	LLMClient llm.LLMClient
+
+	// SystemPrompt string
+
+	// LoadedSkillsPath []string
 
 	Messages    []llm.Message
 	Usage       llm.Usage
@@ -122,7 +126,7 @@ func (s *Session) Save() error {
 
 	messagePath := path.Join(sessionDir, "history.jsonl")
 
-	// TODO: 追加写入历史
+	// OPTIMIZE: 改为jsonl 格式, 方便追加写入历史
 	serializeJson(messagePath, s.Messages)
 
 	return nil
@@ -130,6 +134,8 @@ func (s *Session) Save() error {
 
 // LoadSession 从磁盘 恢复 AgentSession
 func LoadSession(sessionID string) (*Session, error) {
+	session := &Session{}
+
 	// TODO: 可从 内存registry -> 磁盘 分级读
 
 	sessionDir := path.Join(SessionDirBase, sessionID)
@@ -153,11 +159,8 @@ func LoadSession(sessionID string) (*Session, error) {
 			meta = newMeta()
 		}
 	}
+	session.Meta = meta
 
-	systemPrompt, err := getSystemPrompt(meta.Persistence)
-	if err != nil {
-		return nil, err
-	}
 	llmClient, err := llm.NewDeepSeekClient(
 		llm.DeepSeekConfig{
 			APIKey:  meta.LLM.APIKey,
@@ -168,8 +171,13 @@ func LoadSession(sessionID string) (*Session, error) {
 	if err != nil {
 		return nil, err
 	}
+	session.LLMClient = llmClient
 
 	// load messages
+	systemPrompt, err := session.SystemPrompt()
+	if err != nil {
+		return nil, err
+	}
 	messages := []llm.Message{llm.SystemMessage(systemPrompt)}
 	func() {
 		messagePath := path.Join(sessionDir, "history.jsonl")
@@ -186,45 +194,44 @@ func LoadSession(sessionID string) (*Session, error) {
 			logger.Warnf("load history message failed: %v", err)
 		}
 	}()
+	session.Messages = messages
 
 	logger.Debugf("loaded messages: %v", messages)
 
 	ctx, cancel := context.WithCancel(context.Background())
-	return &Session{
-		Ctx:          ctx,
-		cancel:       cancel,
-		Meta:         meta,
-		LLMClient:    llmClient,
-		SystemPrompt: systemPrompt,
-		Messages:     messages,
-	}, nil
+	session.Ctx = ctx
+	session.cancel = cancel
+
+	return session, nil
 }
 
 // NewSession 创建新 session
 func NewSession() (*Session, error) {
-	meta := newMeta()
+	session := &Session{}
 
-	systemPrompt, err := getSystemPrompt(meta.Persistence)
-	if err != nil {
-		return nil, err
-	}
+	session.Meta = newMeta()
+
 	llmClient, err := llm.NewDeepSeekClient(
 		llm.DeepSeekConfig{
-			APIKey:  meta.LLM.APIKey,
-			BaseURL: meta.LLM.BaseURL,
-			Model:   meta.LLM.Model,
+			APIKey:  session.Meta.LLM.APIKey,
+			BaseURL: session.Meta.LLM.BaseURL,
+			Model:   session.Meta.LLM.Model,
 		},
 	)
 	if err != nil {
 		return nil, err
 	}
+	session.LLMClient = llmClient
+
+	systemPrompt, err := session.SystemPrompt()
+	if err != nil {
+		return nil, err
+	}
+	session.Messages = []llm.Message{llm.SystemMessage(systemPrompt)}
+
 	ctx, cancel := context.WithCancel(context.Background())
-	return &Session{
-		Ctx:          ctx,
-		cancel:       cancel,
-		Meta:         meta,
-		LLMClient:    llmClient,
-		SystemPrompt: systemPrompt,
-		Messages:     []llm.Message{llm.SystemMessage(systemPrompt)},
-	}, nil
+	session.Ctx = ctx
+	session.cancel = cancel
+
+	return session, nil
 }

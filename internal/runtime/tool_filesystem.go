@@ -1,4 +1,4 @@
-package tool
+package runtime
 
 import "encoding/json"
 import "fmt"
@@ -41,7 +41,7 @@ func (t *ListDirTool) Definition() *llm.Tool {
 	}
 }
 
-func (t *ListDirTool) Execute(arg string) string {
+func (t *ListDirTool) Execute(s *Session, arg string) string {
 	var args listDirArgs
 	if err := json.Unmarshal([]byte(arg), &args); err != nil {
 		return fmt.Sprintf("invalid arguments: %v", err)
@@ -127,7 +127,7 @@ func (t *ReadFileTool) Definition() *llm.Tool {
 
 // TODO: 封装解析参数操作
 // TODO: 空返回在外部统一处理, 空返回导致 deepseek api 报错
-func (t *ReadFileTool) Execute(arg string) string {
+func (t *ReadFileTool) Execute(s *Session, arg string) string {
 	var args ReadFileArgs
 	if err := json.Unmarshal([]byte(arg), &args); err != nil {
 		return fmt.Sprintf("invalid arguments: %v", err)
@@ -148,4 +148,41 @@ func (t *ReadFileTool) Execute(arg string) string {
 		res = "<empty file>"
 	}
 	return res
+}
+
+
+type ReadMemoryTool struct{}
+
+func (t *ReadMemoryTool) Name() string {
+	return "read_memory"
+}
+
+func (t *ReadMemoryTool) Desc() string {
+	return "Read the memory from disk to update context"
+}
+
+func (t *ReadMemoryTool) Definition() *llm.Tool {
+	return &llm.Tool{
+		Type: llm.ToolTypeFunction,
+		Function: llm.FunctionTool{
+			Name:        t.Name(),
+			Description: t.Desc(),
+			Parameters: map[string]any{
+				"type": "object",
+				"properties": map[string]any{},
+			},
+		},
+	}
+}
+
+func (t *ReadMemoryTool) Execute(s *Session, arg string) string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	memory_bytes, err := os.ReadFile(s.Meta.Persistence.MemoryPath)
+	if err != nil {
+		return fmt.Sprintf("<error: %v>", err.Error())
+	}
+
+	return string(memory_bytes)
 }

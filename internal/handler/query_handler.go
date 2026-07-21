@@ -10,7 +10,7 @@ import "myagent/pkg/logger"
 func HandleQuery(
 	ctx context.Context,
 	query string,
-	state *runtime.Session,
+	s *runtime.Session,
 	output chan *runtime.AgentResponse,
 ) error {
 	logger.Infof("Handle query")
@@ -20,11 +20,11 @@ func HandleQuery(
 		logger.Debugf("HandleQuery Start >>>>>>>>>>>>>>>>\n\n")
 		logger.Debugf("[HandleQuery] query: %v\n", query)
 		logger.Debugf("[HandleQuery] message (before):")
-		for _, message := range state.Messages {
+		for _, message := range s.Messages {
 			logger.Debugf("\tmessage: %+v\n", message)
 		}
 	}
-	state.Messages = append(state.Messages, llm.UserMessage(query))
+	s.AppendMessage(llm.UserMessage(query))
 
 	var gotRespCh chan bool = make(chan bool)
 	go func() {
@@ -47,11 +47,11 @@ func HandleQuery(
 		}
 	}()
 
-	resp, err := state.LLMClient.Chat(
+	resp, err := s.LLMClient.Chat(
 		ctx,
 		llm.ChatRequest{
-			Messages:   state.Messages,
-			Tools:      state.ToolList(),
+			Messages:   s.Messages,
+			Tools:      s.ToolList(),
 			ToolChoice: llm.ToolChoiceAuto,
 		},
 	)
@@ -78,20 +78,21 @@ func HandleQuery(
 		return err
 	}
 
-	state.Response = resp
+	s.UpdateResponse(resp)
+
 
 	assistantMsg, ok := resp.Message()
 	if ok {
-		state.Messages = append(state.Messages, assistantMsg)
+		s.AppendMessage(assistantMsg)
 	}
 
 	logger.Debugf("[HandleQuery] message (after):\n")
-	for _, message := range state.Messages {
+	for _, message := range s.Messages {
 		logger.Debugf("\tmessage: %+v\n", message)
 	}
 	logger.Debugf("HandleQuery Done <<<<<<<<<<<<<<<<\n\n")
 
-	lastMsg := state.Messages[len(state.Messages)-1]
+	lastMsg := s.Messages[len(s.Messages)-1]
 	if lastMsg.ReasoningContent != "" {
 		output <- &runtime.AgentResponse{
 			RespType:      runtime.AgentRespTypeMiddleMsg,

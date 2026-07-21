@@ -3,9 +3,7 @@ package runtime
 import "context"
 import _ "embed"
 import "fmt"
-import "path"
 import "os"
-import "errors"
 import "strings"
 import "text/template"
 import "time"
@@ -15,31 +13,15 @@ import "myagent/pkg/llm"
 //go:embed prompts/system_prompt.md
 var systemPromptTemplate string
 
-// LoadSkills TODO: 注入 skill 描述
+// LoadSkills TODO: 注入 skill 描述 (接入 Skill repository protocol)
+func (s *Session) LoadSkillManifests() error {
+	return fmt.Errorf("not implemented")
+}
+
+// TODO: 等后续接入 SRP 时实现
+// 用户显式指定时加载, load-skill 工具调用时加载
 func (s *Session) LoadSkills() error {
-	entries, err := os.ReadDir()
-	if err != nil {
-		return err
-	}
-
-	// register skill map
-	// TODO: the loading is really happened in the loop
-	for _, skillDir := range entries {
-		if !skillDir.IsDir() {
-			continue
-		}
-		skill, err := os.ReadFile(path.Join(skillDir.Name(), "SKILL.md"))
-		if err != nil {
-			if errors.Is(err, os.ErrNotExist) {
-				// B 下没有 SKILL.md，直接跳过。
-				continue
-			}
-			return fmt.Errorf("read %q: %w", skillDir.Name(), err)
-		}
-
-		// TODO: parse skill Markdown meta data (yaml)
-
-	}
+	return fmt.Errorf("not implemented")
 }
 
 
@@ -52,10 +34,13 @@ func (s *Session) SystemPrompt() (string, error) {
 
 	workingDir, err:= os.Getwd()
 
+	s.mu.RLock()
+	skillDir := s.Meta.Persistence.SkillDir
 	memoryData, err := os.ReadFile(s.Meta.Persistence.MemoryPath)
 	userInfoData, err := os.ReadFile(s.Meta.Persistence.UserInfoPath)
+	s.mu.RUnlock()
 
-	s.LoadSkills()
+	// s.LoadSkillManifests()
 
 	sb := strings.Builder{}
 	tmpl.Execute(
@@ -65,10 +50,9 @@ func (s *Session) SystemPrompt() (string, error) {
 			"WorkingDir": workingDir,
 			"Memory":    string(memoryData),
 			"UserInfo":  string(userInfoData),
-			"SkillDir":  s.Meta.Persistence.SkillDir,
+			"SkillDir":  skillDir,
 		},
 	)
-
 
 	return sb.String(), nil
 }

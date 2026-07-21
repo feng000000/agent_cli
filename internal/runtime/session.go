@@ -1,6 +1,7 @@
 package runtime
 
 import "os"
+import "sync"
 import "context"
 import "path"
 import "encoding/json"
@@ -9,7 +10,7 @@ import "github.com/google/uuid"
 
 import "myagent/pkg/llm"
 import "myagent/pkg/logger"
-import "myagent/internal/tool"
+// import "myagent/internal/tool"
 
 // TODO:  ClientState: client 分开实现
 type ClientState struct {
@@ -49,13 +50,13 @@ type Meta struct {
 
 func newMeta() *Meta {
 	// TODO: default tools
-	listDir := &tool.ListDirTool{}
-	readFile := &tool.ReadFileTool{}
+	listDir := &ListDirTool{}
+	readFile := &ReadFileTool{}
 
 	return &Meta{
 		SessionID: uuid.NewString(),
 		AgentMode: AgentModePlan,
-		ToolMap: map[string]tool.Tool{
+		ToolMap: map[string]Tool{
 			listDir.Name():  listDir,
 			readFile.Name(): readFile,
 		},
@@ -71,45 +72,51 @@ func newMeta() *Meta {
 const SessionDirBase = "./.myagent/sessions"
 
 type Session struct {
-	Ctx    context.Context
+	mu   sync.RWMutex
+	ctx    context.Context
 	cancel context.CancelFunc
 
-	Meta *Meta
+	meta *Meta
 
-	LLMClient llm.LLMClient
+	llmClient llm.LLMClient
 
 	// SystemPrompt string
 
 	// LoadedSkillsPath []string
 
-	Messages    []llm.Message
-	Usage       llm.Usage
-	ContextSize int
-	Response    *llm.ChatResponse
+	messages    []llm.Message
+	usage       llm.Usage
+	contextSize int
+	response    *llm.ChatResponse
 	localMemory string
 }
 
+func (s *Session) UpdateResponse(r *llm.ChatResponse) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.response = r
+}
+
+func (s *Session) Messages() []llm.Message {
+
+}
+
+func (s *Session) AppendMessage(newMessage llm.Message) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.messages = append(s.messages, newMessage)
+}
+
 func (s *Session) ToolList() []llm.Tool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
 	toolList := []llm.Tool{}
-	for _, tool := range s.Meta.ToolMap {
+	for _, tool := range s.meta.ToolMap {
 		toolList = append(toolList, *tool.Definition())
 	}
 	return toolList
-}
-
-func serializeJson(path string, data any) error {
-	jsonBytes, err := json.MarshalIndent(data, "", "    ")
-	if err != nil {
-		return err
-	}
-
-	if jsonBytes != nil {
-		err = os.WriteFile(path, jsonBytes, 0644)
-	}
-	if err != nil {
-		return err
-	}
-	return nil
 }
 
 // Cancel 取消 session 的Ctx
@@ -119,6 +126,9 @@ func (s *Session) Cancel() {
 
 // Save 保存 Session 到磁盘
 func (s *Session) Save() error {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
 	sessionDir := path.Join(SessionDirBase, s.Meta.SessionID)
 
 	metaPath := path.Join(sessionDir, "metadata.json")
@@ -134,7 +144,7 @@ func (s *Session) Save() error {
 
 // LoadSession 从磁盘 恢复 AgentSession
 func LoadSession(sessionID string) (*Session, error) {
-	session := &Session{}
+	s := &Session{}
 
 	// TODO: 可从 内存registry -> 磁盘 分级读
 
@@ -159,7 +169,7 @@ func LoadSession(sessionID string) (*Session, error) {
 			meta = newMeta()
 		}
 	}
-	session.Meta = meta
+	s.Meta = meta
 
 	llmClient, err := llm.NewDeepSeekClient(
 		llm.DeepSeekConfig{
@@ -171,10 +181,10 @@ func LoadSession(sessionID string) (*Session, error) {
 	if err != nil {
 		return nil, err
 	}
-	session.LLMClient = llmClient
+	s.LLMClient = llmClient
 
 	// load messages
-	systemPrompt, err := session.SystemPrompt()
+	systemPrompt, err := s.SystemPrompt()
 	if err != nil {
 		return nil, err
 	}
@@ -194,44 +204,59 @@ func LoadSession(sessionID string) (*Session, error) {
 			logger.Warnf("load history message failed: %v", err)
 		}
 	}()
-	session.Messages = messages
+	s.messages = messages
 
 	logger.Debugf("loaded messages: %v", messages)
 
 	ctx, cancel := context.WithCancel(context.Background())
-	session.Ctx = ctx
-	session.cancel = cancel
+	s.ctx = ctx
+	s.cancel = cancel
 
-	return session, nil
+	return s, nil
 }
 
 // NewSession 创建新 session
 func NewSession() (*Session, error) {
-	session := &Session{}
+	s := &Session{}
 
-	session.Meta = newMeta()
+	s.meta = newMeta()
 
 	llmClient, err := llm.NewDeepSeekClient(
 		llm.DeepSeekConfig{
-			APIKey:  session.Meta.LLM.APIKey,
-			BaseURL: session.Meta.LLM.BaseURL,
-			Model:   session.Meta.LLM.Model,
+			APIKey:  s.meta.LLM.APIKey,
+			BaseURL: s.meta.LLM.BaseURL,
+			Model:   s.meta.LLM.Model,
 		},
 	)
 	if err != nil {
 		return nil, err
 	}
-	session.LLMClient = llmClient
+	s.llmClient = llmClient
 
-	systemPrompt, err := session.SystemPrompt()
+	systemPrompt, err := s.SystemPrompt()
 	if err != nil {
 		return nil, err
 	}
-	session.Messages = []llm.Message{llm.SystemMessage(systemPrompt)}
+	s.messages = []llm.Message{llm.SystemMessage(systemPrompt)}
 
 	ctx, cancel := context.WithCancel(context.Background())
-	session.Ctx = ctx
-	session.cancel = cancel
+	s.ctx = ctx
+	s.cancel = cancel
 
-	return session, nil
+	return s, nil
+}
+
+func serializeJson(path string, data any) error {
+	jsonBytes, err := json.MarshalIndent(data, "", "    ")
+	if err != nil {
+		return err
+	}
+
+	if jsonBytes != nil {
+		err = os.WriteFile(path, jsonBytes, 0644)
+	}
+	if err != nil {
+		return err
+	}
+	return nil
 }

@@ -1,4 +1,4 @@
-package tool
+package runtime
 
 import "myagent/pkg/llm"
 
@@ -14,6 +14,7 @@ type Tool interface {
 	Definition() *llm.Tool
 
 	// Execute 执行工具;
+	// s 为当前会话的 session 对象
 	// arg 为json字符串, 解析结果通过 res channel 传递
-	Execute(arg string) string
+	Execute(s *Session, arg string) string
 }

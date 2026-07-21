@@ -75,7 +75,12 @@ func HandleToolCall(
 	}
 
 	// request LLM
-	// TODO: 封装 call LLM: update state.Response, update state.MessageParam, update usage, context size
+	// TODO: 封装 call LLM:
+	// update state.Response
+	// update state.MessageParam
+	// update usage
+	// context size
+	// 长工具输出落盘, 仅返回路径
 	{
 		req := llm.ChatRequest{
 			Messages: state.Messages,

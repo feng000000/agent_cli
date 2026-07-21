@@ -17,11 +17,11 @@ func (c StopCommand) Desc() string {
 // Exec 停止Agent 运行
 func (c StopCommand) Exec(
 	ctx context.Context,
-	state *runtime.Session,
+	s *runtime.Session,
 	args []string,
 ) (string, error) {
 	// state.Cancel()
 	// return fmt.Sprintf("stop session %v", state.Meta.SessionID), nil
-	// TODO: 只停止一次
+	// TODO: 使用 ACP 停止
 	return "not implemented", nil
 }

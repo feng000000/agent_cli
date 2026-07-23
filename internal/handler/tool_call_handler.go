@@ -1,6 +1,7 @@
 package handler
 
 import "fmt"
+import "sync"
 
 import "myagent/internal/runtime"
 import "myagent/pkg/llm"
@@ -17,6 +18,7 @@ func HandleToolCall(s *runtime.Session) error {
 	}
 
 	idChanMap := map[llm.ToolCall]chan string{}
+	sessionRWMu := &sync.RWMutex{}
 	for _, tc := range s.Response.ToolCalls() {
 		logger.Infof("exec tool: %v\n", tc.Function.Name)
 		resCh := make(chan string)
@@ -37,13 +39,13 @@ func HandleToolCall(s *runtime.Session) error {
 					)
 				}
 			}()
-			res := tool.Execute(tc.Function.Arguments)
+			res := runtime.ExecTool(s, sessionRWMu, tool, tc.Function.Arguments)
 			resCh <- res
 		}()
 
 	}
 
-	toolMsgs := []llm.Message{}
+	toolMsgs := make([]llm.Message, 0, len(idChanMap))
 	for tc, ch := range idChanMap {
 		res, ok := <-ch
 		if !ok {
@@ -71,7 +73,6 @@ func HandleToolCall(s *runtime.Session) error {
 	}
 
 	// request LLM
-	// TODO: 长工具输出落盘, 仅返回路径
 	err := s.CallLLM(toolMsgs...)
 	if err != nil {
 		return err

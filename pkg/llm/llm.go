@@ -115,28 +115,33 @@ type Choice struct {
 
 // Usage 表示本次请求的 token 用量.
 type Usage struct {
-	PromptTokens          int                    `json:"prompt_tokens"`
-	CompletionTokens      int                    `json:"completion_tokens"`
-	TotalTokens           int                    `json:"total_tokens"`
-	PromptCacheHitTokens  int                    `json:"prompt_cache_hit_tokens"`
-	PromptCacheMissTokens int                    `json:"prompt_cache_miss_tokens"`
-	CompletionDetails     CompletionTokenDetails `json:"completion_tokens_details"`
+	Prompt            int                    `json:"prompt_tokens"`
+	Completion        int                    `json:"completion_tokens"`
+	Total             int                    `json:"total_tokens"`
+	PromptCacheHit    int                    `json:"prompt_cache_hit_tokens"`
+	PromptCacheMiss   int                    `json:"prompt_cache_miss_tokens"`
+	CompletionDetails CompletionTokenDetails `json:"completion_tokens_details"`
 }
 
 // Append 用于累加 Usage
-func (u *Usage) Append(otherUsage Usage) {
-	u.PromptTokens += otherUsage.PromptTokens
-	u.CompletionTokens += otherUsage.CompletionTokens
-	u.TotalTokens += otherUsage.TotalTokens
-	u.PromptCacheHitTokens += otherUsage.PromptCacheHitTokens
-	u.PromptCacheMissTokens += otherUsage.PromptCacheMissTokens
-	u.CompletionDetails.ReasoningTokens += otherUsage.CompletionDetails.ReasoningTokens
+func (u *Usage) Append(otherUsage *Usage) *Usage {
+	return &Usage{
+		Prompt:          u.Prompt + otherUsage.Prompt,
+		Completion:      u.Completion + otherUsage.Completion,
+		Total:           u.Total + otherUsage.Total,
+		PromptCacheHit:  u.PromptCacheHit + otherUsage.PromptCacheHit,
+		PromptCacheMiss: u.PromptCacheMiss + otherUsage.PromptCacheMiss,
+		CompletionDetails: CompletionTokenDetails{
+			Reasoning: u.CompletionDetails.Reasoning +
+				otherUsage.CompletionDetails.Reasoning,
+		},
+	}
 
 }
 
 // CompletionTokenDetails 表示生成 token 的细分用量.
 type CompletionTokenDetails struct {
-	ReasoningTokens int `json:"reasoning_tokens"`
+	Reasoning int `json:"reasoning_tokens"`
 }
 
 // SystemMessage 创建系统消息.

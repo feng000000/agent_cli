@@ -34,11 +34,9 @@ func (s *Session) SystemPrompt() (string, error) {
 
 	workingDir, err:= os.Getwd()
 
-	s.mu.RLock()
 	skillDir := s.Meta.Persistence.SkillDir
 	memoryData, err := os.ReadFile(s.Meta.Persistence.MemoryPath)
 	userInfoData, err := os.ReadFile(s.Meta.Persistence.UserInfoPath)
-	s.mu.RUnlock()
 
 	// s.LoadSkillManifests()
 
@@ -70,13 +68,13 @@ type LLMCompressor struct{}
 
 // Compress 使用 大模型压缩总结
 func (lc *LLMCompressor) Compress(
-	ctx context.Context, state *Session,
+	ctx context.Context, s *Session,
 ) error {
-	resp, err := state.LLMClient.Chat(
+	resp, err := s.RawLLMClient().Chat(
 		ctx,
 		llm.ChatRequest{
 			Messages: append(
-				state.Messages,
+				s.Messages,
 				llm.UserMessage(compressSystemPrompt),
 			),
 		},
@@ -89,7 +87,13 @@ func (lc *LLMCompressor) Compress(
 		"<history_context_summary>%s</history_context_summary>",
 		resp.Content(),
 	)
-	state.Messages = []llm.Message{llm.AssistantMessage(summary)}
+	s.Messages = []llm.Message{llm.AssistantMessage(summary)}
+
+	s.ForceUpdateContextInfo(
+		[]llm.Message{llm.AssistantMessage(summary)},
+		s.Usage.Append(&resp.Usage),
+		resp.Usage.Completion,
+	)
 
 	return nil
 }

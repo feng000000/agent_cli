@@ -22,7 +22,7 @@ func StartSimpleUI(
 	go outputMessage(output, och)
 
 
-	a, err := NewAgent(msgQueue, och, sessionID)
+	a, err := NewAgent(sessionID, msgQueue, och)
 	if err != nil {
 		fmt.Printf("NewAgent failed: %v\n", err)
 		return err

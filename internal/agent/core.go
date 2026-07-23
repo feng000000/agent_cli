@@ -17,24 +17,24 @@ func Exec(
 
 	// run agent
 	if res, err := a.runAgent(firstInput); err != nil {
-		a.OutputChan <- &runtime.AgentResponse{
+		a.Session.OutputChan <- &runtime.AgentResponse{
 			RespType: runtime.AgentRespTypeError,
 			Err:      fmt.Errorf("execute agent loop failed: %v", err),
 		}
 	} else { // got a response
 		logger.Debugf("agent response: %v\n", *res)
-		a.OutputChan <- res
+		a.Session.OutputChan <- res
 	}
 
 }
 
 func NewAgent(
-	input *runtime.MessageQueue,
-	output chan *runtime.AgentResponse,
 	sessionID string,
+	mq *runtime.MessageQueue,
+	output chan *runtime.AgentResponse,
 ) (*Agent, error) {
-	if input == nil {
-		input = runtime.NewMessageQueue()
+	if mq == nil {
+		mq = runtime.NewMessageQueue()
 	}
 	if output == nil {
 		output = make(chan *runtime.AgentResponse, 65536)
@@ -43,29 +43,20 @@ func NewAgent(
 	var session *runtime.Session
 	var err error
 	if sessionID != "" {
-		session, err = runtime.LoadSession(sessionID)
+		session, err = runtime.LoadSession(sessionID, mq, output)
 	} else {
-		session, err = runtime.NewSession()
+		session, err = runtime.NewSession(mq, output)
 	}
 
 	if err != nil {
 		return nil, err
 	}
 
-	return &Agent{
-		MessageQueue: input,
-		OutputChan:   output,
-		Session:      session,
-	}, nil
+	return &Agent{Session: session}, nil
 
 }
 
 type Agent struct {
-	// MessageQueue 可以直接获取追加信息
-	MessageQueue *runtime.MessageQueue
-	// OutputChan emit ACP 事件
-	OutputChan chan *runtime.AgentResponse
-
 	Session *runtime.Session
 }
 
@@ -92,7 +83,7 @@ func (a *Agent) runAgent(firstInput *runtime.UserInput) (*runtime.AgentResponse,
 				if err != nil {
 					return
 				}
-				a.OutputChan <- &runtime.AgentResponse{
+				a.Session.OutputChan <- &runtime.AgentResponse{
 					RespType:  runtime.AgentRespTypeCmd,
 					CmdResult: res,
 				}
@@ -151,21 +142,12 @@ func (a *Agent) agentHandler(query string) (*runtime.AgentResponse, error) {
 				a.Session.Response.HasToolCalls() { // tool call
 
 				logger.Debugf("handle tool call: %v\n", query)
-				err = handler.HandleToolCall(
-					a.Session.Ctx,
-					a.Session,
-					a.MessageQueue,
-				)
+				err = handler.HandleToolCall(a.Session)
 
 			} else if query != "" { // normal query
 
 				logger.Debugf("handle query: %v\n", query)
-				err = handler.HandleQuery(
-					a.Session.Ctx,
-					query,
-					a.Session,
-					a.OutputChan,
-				)
+				err = handler.HandleQuery(query, a.Session)
 
 			} else {
 				err = fmt.Errorf("invalid context (empty tool call and query)")
@@ -175,14 +157,14 @@ func (a *Agent) agentHandler(query string) (*runtime.AgentResponse, error) {
 				return nil, err
 			}
 		}
-		// update usage (context size == )
-		if a.Session != nil && a.Session.Response != nil {
-			a.Session.Usage.Append(a.Session.Response.Usage)
+		// // update usage (context size == )
+		// if a.Session != nil && a.Session.Response != nil {
+		// 	a.Session.Usage = a.Session.Usage.Append(&a.Session.Response.Usage)
 
-			// update context size
-			a.Session.ContextSize = a.Session.Response.Usage.PromptTokens +
-				a.Session.Response.Usage.CompletionTokens
-		}
+		// 	// update context size
+		// 	a.Session.ContextSize = a.Session.Response.Usage.PromptTokens +
+		// 		a.Session.Response.Usage.CompletionTokens
+		// }
 
 		a.Session.Save()
 

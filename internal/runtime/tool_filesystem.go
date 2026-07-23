@@ -176,9 +176,6 @@ func (t *ReadMemoryTool) Definition() *llm.Tool {
 }
 
 func (t *ReadMemoryTool) Execute(s *Session, arg string) string {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
 	memory_bytes, err := os.ReadFile(s.Meta.Persistence.MemoryPath)
 	if err != nil {
 		return fmt.Sprintf("<error: %v>", err.Error())

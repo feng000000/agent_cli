@@ -1,8 +1,8 @@
 package runtime
 
 import "os"
-import "sync"
 import "context"
+import "time"
 import "path"
 import "encoding/json"
 
@@ -10,6 +10,7 @@ import "github.com/google/uuid"
 
 import "myagent/pkg/llm"
 import "myagent/pkg/logger"
+
 // import "myagent/internal/tool"
 
 // TODO:  ClientState: client 分开实现
@@ -45,7 +46,7 @@ type Meta struct {
 	MaxTokensToCompress int           `json:"max_tokens_to_compress"`
 	Persistence         *Persistence  `json:"persistence"`
 
-	ToolMap map[string]tool.Tool `json:"-"`
+	ToolMap map[string]Tool `json:"-"`
 }
 
 func newMeta() *Meta {
@@ -72,63 +73,124 @@ func newMeta() *Meta {
 const SessionDirBase = "./.myagent/sessions"
 
 type Session struct {
-	mu   sync.RWMutex
-	ctx    context.Context
-	cancel context.CancelFunc
-
-	meta *Meta
-
 	llmClient llm.LLMClient
 
-	// SystemPrompt string
+	// MessageQueue 可以直接获取追加信息
+	MessageQueue *MessageQueue
+	// OutputChan emit ACP 事件
+	OutputChan chan *AgentResponse
 
-	// LoadedSkillsPath []string
+	Ctx    context.Context
+	Cancel context.CancelFunc
 
-	messages    []llm.Message
-	usage       llm.Usage
-	contextSize int
-	response    *llm.ChatResponse
-	localMemory string
+	Meta        *Meta
+	Messages    []llm.Message
+	Usage       *llm.Usage
+	ContextSize int
+	Response    *llm.ChatResponse
+	LocalMemory string
 }
 
-func (s *Session) UpdateResponse(r *llm.ChatResponse) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	s.response = r
+func (s *Session) RawLLMClient() llm.LLMClient {
+	return s.llmClient
 }
 
-func (s *Session) Messages() []llm.Message {
-
+func (s *Session) ForceUpdateContextInfo(
+	messages []llm.Message,
+	usage *llm.Usage,
+	contextSize int,
+) {
+	s.Messages = messages
+	s.Usage = usage
+	s.ContextSize = contextSize
 }
 
-func (s *Session) AppendMessage(newMessage llm.Message) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.messages = append(s.messages, newMessage)
+
+// CallLLM 封装请求 LLM 和更新上下文的操作
+func (s *Session) CallLLM(newMsgs ...llm.Message) error {
+	// send event
+	var gotRespCh chan bool = make(chan bool)
+	go func() {
+		ticker := time.NewTicker(1 * time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case res := <-gotRespCh:
+				if res {
+					s.OutputChan <- &AgentResponse{
+						RespType:      AgentRespTypeMiddleMsg,
+						MiddleMessage: "got llm resp",
+					}
+				} else {
+					s.OutputChan <- &AgentResponse{
+						RespType:      AgentRespTypeMiddleMsg,
+						MiddleMessage: "got llm resp failed",
+					}
+				}
+				return
+			case <-ticker.C:
+				s.OutputChan <- &AgentResponse{
+					RespType:      AgentRespTypeMiddleMsg,
+					MiddleMessage: "waiting",
+				}
+			}
+		}
+	}()
+
+	sysPrompt, err := s.SystemPrompt()
+	if err != nil {
+		return err
+	}
+	msgs := append([]llm.Message{llm.SystemMessage(sysPrompt)}, s.Messages...)
+	msgs = append(msgs, newMsgs...)
+	resp, err := s.llmClient.Chat(
+		s.Ctx,
+		llm.ChatRequest{
+			Messages: msgs,
+			Tools:    s.ToolList(),
+		},
+	)
+	// got resp signal
+	if err != nil {
+		gotRespCh <- false
+		return err
+	}
+	gotRespCh <- true
+
+	// update response, message, usage, context size
+	s.Response = resp
+	if assistantMsg, ok := resp.Message(); ok {
+		s.Messages = append(s.Messages, assistantMsg)
+	}
+	if s.Response != nil {
+		s.Usage.Append(&s.Response.Usage)
+
+		s.ContextSize = s.Response.Usage.Prompt +
+			s.Response.Usage.Completion
+	}
+
+	// send reasoning event
+	if lastMsg := s.Messages[len(s.Messages)-1]; lastMsg.ReasoningContent != "" {
+		s.OutputChan <- &AgentResponse{
+			RespType:      AgentRespTypeMiddleMsg,
+			MiddleMessage: lastMsg.ReasoningContent,
+		}
+	}
+
+	return nil
 }
 
 func (s *Session) ToolList() []llm.Tool {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
 
 	toolList := []llm.Tool{}
-	for _, tool := range s.meta.ToolMap {
+	for _, tool := range s.Meta.ToolMap {
 		toolList = append(toolList, *tool.Definition())
 	}
 	return toolList
 }
 
-// Cancel 取消 session 的Ctx
-func (s *Session) Cancel() {
-	s.cancel()
-}
-
 // Save 保存 Session 到磁盘
 func (s *Session) Save() error {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
 	sessionDir := path.Join(SessionDirBase, s.Meta.SessionID)
 
 	metaPath := path.Join(sessionDir, "metadata.json")
@@ -143,8 +205,15 @@ func (s *Session) Save() error {
 }
 
 // LoadSession 从磁盘 恢复 AgentSession
-func LoadSession(sessionID string) (*Session, error) {
-	s := &Session{}
+func LoadSession(
+	sessionID string,
+	mq *MessageQueue,
+	output chan *AgentResponse,
+) (*Session, error) {
+	s := &Session{
+		MessageQueue: mq,
+		OutputChan:   output,
+	}
 
 	// TODO: 可从 内存registry -> 磁盘 分级读
 
@@ -181,7 +250,7 @@ func LoadSession(sessionID string) (*Session, error) {
 	if err != nil {
 		return nil, err
 	}
-	s.LLMClient = llmClient
+	s.llmClient = llmClient
 
 	// load messages
 	systemPrompt, err := s.SystemPrompt()
@@ -204,28 +273,34 @@ func LoadSession(sessionID string) (*Session, error) {
 			logger.Warnf("load history message failed: %v", err)
 		}
 	}()
-	s.messages = messages
+	s.Messages = messages
 
 	logger.Debugf("loaded messages: %v", messages)
 
 	ctx, cancel := context.WithCancel(context.Background())
-	s.ctx = ctx
-	s.cancel = cancel
+	s.Ctx = ctx
+	s.Cancel = cancel
 
 	return s, nil
 }
 
 // NewSession 创建新 session
-func NewSession() (*Session, error) {
-	s := &Session{}
+func NewSession(
+	mq *MessageQueue,
+	output chan *AgentResponse,
+) (*Session, error) {
+	s := &Session{
+		MessageQueue: mq,
+		OutputChan:   output,
+	}
 
-	s.meta = newMeta()
+	s.Meta = newMeta()
 
 	llmClient, err := llm.NewDeepSeekClient(
 		llm.DeepSeekConfig{
-			APIKey:  s.meta.LLM.APIKey,
-			BaseURL: s.meta.LLM.BaseURL,
-			Model:   s.meta.LLM.Model,
+			APIKey:  s.Meta.LLM.APIKey,
+			BaseURL: s.Meta.LLM.BaseURL,
+			Model:   s.Meta.LLM.Model,
 		},
 	)
 	if err != nil {
@@ -237,11 +312,11 @@ func NewSession() (*Session, error) {
 	if err != nil {
 		return nil, err
 	}
-	s.messages = []llm.Message{llm.SystemMessage(systemPrompt)}
+	s.Messages = []llm.Message{llm.SystemMessage(systemPrompt)}
 
 	ctx, cancel := context.WithCancel(context.Background())
-	s.ctx = ctx
-	s.cancel = cancel
+	s.Ctx = ctx
+	s.Cancel = cancel
 
 	return s, nil
 }

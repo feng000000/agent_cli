@@ -1,33 +1,28 @@
 package handler
 
 import "fmt"
-import "context"
 
 import "myagent/internal/runtime"
 import "myagent/pkg/llm"
 import "myagent/pkg/logger"
 
-func HandleToolCall(
-	ctx context.Context,
-	state *runtime.Session,
-	messageQueue *runtime.MessageQueue,
-) error {
+func HandleToolCall(s *runtime.Session) error {
 	// DEBUG:
 	{
 		logger.Debugf("HandleToolCall Start >>>>>>>>>>>>>>>>\n")
 		logger.Debugf("[HandleToolCall] message (before):\n")
-		for _, message := range state.Messages {
+		for _, message := range s.Messages {
 			logger.Debugf("\tmessage: %+v\n", message)
 		}
 	}
 
 	idChanMap := map[llm.ToolCall]chan string{}
-	for _, tc := range state.Response.ToolCalls() {
+	for _, tc := range s.Response.ToolCalls() {
 		logger.Infof("exec tool: %v\n", tc.Function.Name)
 		resCh := make(chan string)
 		idChanMap[tc] = resCh
 
-		tool, ok := state.Meta.ToolMap[tc.Function.Name]
+		tool, ok := s.Meta.ToolMap[tc.Function.Name]
 		if !ok {
 			return fmt.Errorf(
 				"tool %v(%v) not exists", tc.Function.Name, tc.ID,
@@ -48,6 +43,7 @@ func HandleToolCall(
 
 	}
 
+	toolMsgs := []llm.Message{}
 	for tc, ch := range idChanMap {
 		res, ok := <-ch
 		if !ok {
@@ -57,44 +53,28 @@ func HandleToolCall(
 		}
 
 		logger.Debugf("tool %v result: %v\n", tc.Function.Name, res)
-		state.Messages = append(
-			state.Messages,
+		toolMsgs = append(
+			toolMsgs,
 			llm.ToolResultMessage(tc.ID, res),
 		)
 	}
 
 	// append query from state.InputChan
 	{
-		appendInput := messageQueue.GetTypedInput(runtime.InputTypePrompt)
+		appendInput := s.MessageQueue.GetTypedInput(runtime.InputTypePrompt)
 		if appendInput != nil && len(appendInput.Content) != 0 {
-			state.Messages = append(
-				state.Messages,
+			toolMsgs= append(
+				toolMsgs,
 				llm.UserMessage(string(appendInput.Content)),
 			)
 		}
 	}
 
 	// request LLM
-	// TODO: 封装 call LLM:
-	// update state.Response
-	// update state.MessageParam
-	// update usage
-	// context size
-	// 长工具输出落盘, 仅返回路径
-	{
-		req := llm.ChatRequest{
-			Messages: state.Messages,
-			Tools:    state.ToolList(),
-		}
-		resp, err := state.LLMClient.Chat(ctx, req)
-		if err != nil {
-			return err
-		}
-
-		state.Response = resp
-		if assistantMsg, ok := resp.Message(); ok {
-			state.Messages = append(state.Messages, assistantMsg)
-		}
+	// TODO: 长工具输出落盘, 仅返回路径
+	err := s.CallLLM(toolMsgs...)
+	if err != nil {
+		return err
 	}
 
 	// DEBUG:
@@ -102,10 +82,10 @@ func HandleToolCall(
 		// fmt.Printf("[HandleToolCall] result: %v\n", ctx.Response.Content())
 		logger.Debugf(
 			"[HandleToolCall] HasToolCall: %v\n",
-			state.Response.HasToolCalls(),
+			s.Response.HasToolCalls(),
 		)
 		logger.Debugf("[HandleToolCall] message (after):\n")
-		for _, message := range state.Messages {
+		for _, message := range s.Messages {
 			logger.Debugf("\tmessage: %+v\n", message)
 		}
 		logger.Debugf("HandleToolCall Done <<<<<<<<<<<<<<<<\n\n")

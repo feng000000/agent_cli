@@ -1,4 +1,4 @@
-package runtime
+package session
 
 import "os"
 import "context"
@@ -6,93 +6,33 @@ import "time"
 import "path"
 import "encoding/json"
 
-import "github.com/google/uuid"
 
 import "myagent/pkg/llm"
 import "myagent/pkg/logger"
 
-// import "myagent/internal/tool"
+import "myagent/internal/session/state"
+import "myagent/internal/session/runtime"
+import "myagent/internal/session/meta"
 
 // TODO:  ClientState: client 分开实现
 type ClientState struct {
 	CancelFunc func()
 }
 
-type AgentModeEnum string
 
-const (
-	AgentModePlan     AgentModeEnum = "plan"
-	AgentModeAutoEdit AgentModeEnum = "auto-edit"
-	AgentModeAutoExec AgentModeEnum = "auto-exec"
-)
-
-type Persistence struct {
-	PersistenceDir string `json:"persistence_dir"`
-	MemoryPath     string `json:"memory_path"`
-	UserInfoPath   string `json:"userinfo_path"`
-	SkillDir       string `json:"skill_dir"`
-}
-
-type LLMConfig struct {
-	BaseURL string `json:"base_url"`
-	Model   string `json:"model"`
-	APIKey  string `json:"api_key"`
-}
-
-type Meta struct {
-	SessionID           string        `json:"session_id"`
-	LLM                 LLMConfig     `json:"llm"`
-	AgentMode           AgentModeEnum `json:"agent_mode"`
-	MaxTokensToCompress int           `json:"max_tokens_to_compress"`
-	Persistence         *Persistence  `json:"persistence"`
-
-	ToolMap map[string]Tool `json:"-"`
-}
-
-func newMeta() *Meta {
-	// TODO: default tools
-	listDir := &ListDirTool{}
-	readFile := &ReadFileTool{}
-
-	return &Meta{
-		SessionID: uuid.NewString(),
-		AgentMode: AgentModePlan,
-		ToolMap: map[string]Tool{
-			listDir.Name():  listDir,
-			readFile.Name(): readFile,
-		},
-		Persistence: &Persistence{
-			PersistenceDir: "./.myagent/persistence",
-			MemoryPath:     "./.myagent/persistence/memory.md",
-			UserInfoPath:   "./.myagent/persistence/user_info.md",
-			SkillDir:       "./.myagent/persistence/skills/",
-		},
-	}
-}
 
 const SessionDirBase = "./.myagent/sessions"
 
 type Session struct {
-	llmClient llm.LLMClient
+	Meta *meta.Meta
 
-	// MessageQueue 可以直接获取追加信息
-	MessageQueue *MessageQueue
-	// OutputChan emit ACP 事件
-	OutputChan chan *AgentResponse
+	State *state.State
 
-	Ctx    context.Context
-	Cancel context.CancelFunc
-
-	Meta        *Meta
-	Messages    []llm.Message
-	Usage       *llm.Usage
-	ContextSize int
-	Response    *llm.ChatResponse
-	LocalMemory string
+	Runtime *runtime.Runtime
 }
 
 func (s *Session) RawLLMClient() llm.LLMClient {
-	return s.llmClient
+	return s.Runtime.llmClient
 }
 
 func (s *Session) ForceUpdateContextInfo(
@@ -100,11 +40,14 @@ func (s *Session) ForceUpdateContextInfo(
 	usage *llm.Usage,
 	contextSize int,
 ) {
-	s.Messages = messages
-	s.Usage = usage
-	s.ContextSize = contextSize
+	s.State.Messages = messages
+	s.State.Usage = usage
+	s.State.ContextSize = contextSize
 }
 
+func (s *Session) Emit(resp *AgentResponse) {
+	s.Runtime.outputChan <- resp
+}
 
 // CallLLM 封装请求 LLM 和更新上下文的操作
 func (s *Session) CallLLM(newMsgs ...llm.Message) error {
@@ -117,19 +60,23 @@ func (s *Session) CallLLM(newMsgs ...llm.Message) error {
 			select {
 			case res := <-gotRespCh:
 				if res {
-					s.OutputChan <- &AgentResponse{
-						RespType:      AgentRespTypeMiddleMsg,
-						MiddleMessage: "got llm resp",
-					}
+					s.Emit(
+						&AgentResponse{
+							RespType:      AgentRespTypeMiddleMsg,
+							MiddleMessage: "got llm resp",
+						},
+					)
 				} else {
-					s.OutputChan <- &AgentResponse{
-						RespType:      AgentRespTypeMiddleMsg,
-						MiddleMessage: "got llm resp failed",
-					}
+					s.Emit(
+						&AgentResponse{
+							RespType:      AgentRespTypeMiddleMsg,
+							MiddleMessage: "got llm resp failed",
+						},
+					)
 				}
 				return
 			case <-ticker.C:
-				s.OutputChan <- &AgentResponse{
+				s.Runtime.outputChan <- &AgentResponse{
 					RespType:      AgentRespTypeMiddleMsg,
 					MiddleMessage: "waiting",
 				}
@@ -141,10 +88,10 @@ func (s *Session) CallLLM(newMsgs ...llm.Message) error {
 	if err != nil {
 		return err
 	}
-	msgs := append([]llm.Message{llm.SystemMessage(sysPrompt)}, s.Messages...)
+	msgs := append([]llm.Message{llm.SystemMessage(sysPrompt)}, s.State.Messages...)
 	msgs = append(msgs, newMsgs...)
-	resp, err := s.llmClient.Chat(
-		s.Ctx,
+	resp, err := s.Runtime.llmClient.Chat(
+		s.Runtime.Ctx,
 		llm.ChatRequest{
 			Messages: msgs,
 			Tools:    s.ToolList(),
@@ -158,23 +105,26 @@ func (s *Session) CallLLM(newMsgs ...llm.Message) error {
 	gotRespCh <- true
 
 	// update response, message, usage, context size
-	s.Response = resp
+	s.Runtime.Response = resp
 	if assistantMsg, ok := resp.Message(); ok {
-		s.Messages = append(s.Messages, assistantMsg)
+		s.State.Messages = append(s.State.Messages, assistantMsg)
 	}
-	if s.Response != nil {
-		s.Usage.Append(&s.Response.Usage)
+	if s.Runtime.Response != nil {
+		s.State.Usage.Append(&s.Runtime.Response.Usage)
 
-		s.ContextSize = s.Response.Usage.Prompt +
-			s.Response.Usage.Completion
+		s.State.ContextSize = s.Runtime.Response.Usage.Prompt +
+			s.Runtime.Response.Usage.Completion
 	}
 
 	// send reasoning event
-	if lastMsg := s.Messages[len(s.Messages)-1]; lastMsg.ReasoningContent != "" {
-		s.OutputChan <- &AgentResponse{
-			RespType:      AgentRespTypeMiddleMsg,
-			MiddleMessage: lastMsg.ReasoningContent,
-		}
+	lastMsg := s.State.Messages[len(s.State.Messages)-1]
+	if lastMsg.ReasoningContent != "" {
+		s.Emit(
+			&AgentResponse{
+				RespType:      AgentRespTypeMiddleMsg,
+				MiddleMessage: lastMsg.ReasoningContent,
+			},
+		)
 	}
 
 	return nil
@@ -199,7 +149,7 @@ func (s *Session) Save() error {
 	messagePath := path.Join(sessionDir, "history.jsonl")
 
 	// OPTIMIZE: 改为jsonl 格式, 方便追加写入历史
-	serializeJson(messagePath, s.Messages)
+	serializeJson(messagePath, s.State.Messages)
 
 	return nil
 }
@@ -240,6 +190,7 @@ func LoadSession(
 	}
 	s.Meta = meta
 
+	runtime := &Runtime{MessageQueue: mq, outputChan: output}
 	llmClient, err := llm.NewDeepSeekClient(
 		llm.DeepSeekConfig{
 			APIKey:  meta.LLM.APIKey,
@@ -250,8 +201,14 @@ func LoadSession(
 	if err != nil {
 		return nil, err
 	}
-	s.llmClient = llmClient
+	ctx, cancel := context.WithCancel(context.Background())
+	runtime.llmClient = llmClient
+	runtime.Ctx = ctx
+	runtime.Cancel = cancel
 
+	s.Runtime = runtime
+
+	state := &State{}
 	// load messages
 	systemPrompt, err := s.SystemPrompt()
 	if err != nil {
@@ -277,7 +234,6 @@ func LoadSession(
 
 	logger.Debugf("loaded messages: %v", messages)
 
-	ctx, cancel := context.WithCancel(context.Background())
 	s.Ctx = ctx
 	s.Cancel = cancel
 

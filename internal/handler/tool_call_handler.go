@@ -7,6 +7,15 @@ import "myagent/internal/runtime"
 import "myagent/pkg/llm"
 import "myagent/pkg/logger"
 
+func findToolCallID(id string, toolMsgs []runtime.ToolMessage) int {
+	for i, msg := range toolMsgs {
+		if msg.ToolCallID == id {
+			return i
+		}
+	}
+	return -1
+}
+
 func HandleToolCall(s *runtime.Session) error {
 	// DEBUG:
 	{
@@ -17,11 +26,18 @@ func HandleToolCall(s *runtime.Session) error {
 		}
 	}
 
-	idChanMap := map[llm.ToolCall]chan string{}
+	idChanMap := map[llm.ToolCall]chan runtime.ToolMessage{}
 	sessionRWMu := &sync.RWMutex{}
+
+
 	for _, tc := range s.Response.ToolCalls() {
+		// 已经执行过
+		if findToolCallID(tc.ID, s.ToolMessages) != -1 {
+			continue
+		}
+
 		logger.Infof("exec tool: %v\n", tc.Function.Name)
-		resCh := make(chan string)
+		resCh := make(chan runtime.ToolMessage)
 		idChanMap[tc] = resCh
 
 		tool, ok := s.Meta.ToolMap[tc.Function.Name]
@@ -34,30 +50,36 @@ func HandleToolCall(s *runtime.Session) error {
 		go func() {
 			defer func() {
 				if r := recover(); r != nil {
-					resCh <- fmt.Sprintf(
-						"exec tool %v failed: %v", tc.Function.Name, r,
-					)
+					resCh <- runtime.ToolMessage{
+						Result: fmt.Sprintf(
+							"exec tool %v failed: %v", tc.Function.Name, r,
+						),
+					}
 				}
 			}()
-			res := runtime.ExecTool(s, sessionRWMu, tool, tc.Function.Arguments)
+			res := runtime.ExecTool(s, sessionRWMu, tc.ID, tool, tc.Function.Arguments)
 			resCh <- res
 		}()
 
 	}
 
-	toolMsgs := make([]llm.Message, 0, len(idChanMap))
+	llmToolMsgs := make([]llm.Message, 0, len(idChanMap))
+	toolMsgs := make([]runtime.ToolMessage, 0, len(idChanMap))
+
+	// wait tool exec results
 	for tc, ch := range idChanMap {
-		res, ok := <-ch
+		toolMsg, ok := <-ch
 		if !ok {
 			return fmt.Errorf(
 				"tool %v(%v) execute failed", tc.Function.Name, tc.ID,
 			)
 		}
 
-		logger.Debugf("tool %v result: %v\n", tc.Function.Name, res)
-		toolMsgs = append(
-			toolMsgs,
-			llm.ToolResultMessage(tc.ID, res),
+		logger.Debugf("tool %v result: %v\n", tc.Function.Name, toolMsg)
+		toolMsgs = append(toolMsgs, toolMsg)
+		llmToolMsgs = append(
+			llmToolMsgs,
+			llm.ToolResultMessage(tc.ID, toolMsg.Result),
 		)
 	}
 
@@ -65,18 +87,21 @@ func HandleToolCall(s *runtime.Session) error {
 	{
 		appendInput := s.MessageQueue.GetTypedInput(runtime.InputTypePrompt)
 		if appendInput != nil && len(appendInput.Content) != 0 {
-			toolMsgs= append(
-				toolMsgs,
+			llmToolMsgs= append(
+				llmToolMsgs,
 				llm.UserMessage(string(appendInput.Content)),
 			)
 		}
 	}
 
 	// request LLM
-	err := s.CallLLM(toolMsgs...)
+	err := s.CallLLM(llmToolMsgs...)
 	if err != nil {
 		return err
 	}
+
+	// update session.ToolMessages
+	s.ToolMessages = append(s.ToolMessages, toolMsgs...)
 
 	// DEBUG:
 	{

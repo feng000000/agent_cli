@@ -1,4 +1,4 @@
-package runtime
+package session
 
 import "context"
 import _ "embed"
@@ -57,7 +57,7 @@ func (s *Session) SystemPrompt() (string, error) {
 
 
 type Compressor interface {
-	Compress(ctx context.Context, state *Session) error
+	Compress(ctx context.Context, s *Session) error
 }
 
 //go:embed prompts/compress_system_prompt.md

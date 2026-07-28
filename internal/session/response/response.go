@@ -1,4 +1,4 @@
-package runtime
+package response
 
 import "myagent/pkg/llm"
 
@@ -9,6 +9,7 @@ const (
 	AgentRespTypeLLM       = "llm_response"
 	AgentRespTypeError     = "error"
 	AgentRespTypeMiddleMsg = "middle_message"
+	AgentRespTypeConfirm   = "confirm"
 )
 
 type AgentResponse struct {
@@ -18,4 +19,6 @@ type AgentResponse struct {
 	LLMResponse   *llm.ChatResponse
 	Err           error
 	MiddleMessage string
+
+	ConfirmMessage string
 }

@@ -1,4 +1,6 @@
-package runtime
+package tool
+
+import "time"
 
 import "myagent/pkg/llm"
 
@@ -11,6 +13,10 @@ func (t *LoadSkillTool) Name() string {
 
 func (t *LoadSkillTool) Desc() string {
 	return "Load skill content"
+}
+
+func (t *LoadSkillTool) Timeout() time.Duration {
+	return time.Second * 5
 }
 
 func (t *LoadSkillTool) Definition() *llm.Tool {

@@ -1,10 +1,11 @@
-package runtime
+package tool
 
 import "encoding/json"
 import "fmt"
 import "sync"
 import "os"
 import "strings"
+import "time"
 
 import "myagent/pkg/llm"
 
@@ -20,6 +21,11 @@ func (t *ListDirTool) Name() string {
 
 func (t *ListDirTool) Desc() string {
 	return "list information about all files and folders within the directory"
+}
+
+
+func (t *ListDirTool) Timeout() time.Duration {
+	return time.Second * 3
 }
 
 func (t *ListDirTool) Definition() *llm.Tool {
@@ -54,12 +60,12 @@ func (t *ListDirTool) execute(
 
 	path := strings.TrimSpace(args.Path)
 	if path == "" {
-		return "path is required"
+		return "", fmt.Errorf("path is required")
 	}
 
 	entries, err := os.ReadDir(path)
 	if err != nil {
-		return fmt.Sprintf("read directory failed: %v", err)
+		return "", fmt.Errorf("read directory failed: %v", err)
 
 	}
 
@@ -70,7 +76,7 @@ func (t *ListDirTool) execute(
 		name := entry.Name()
 		info, err := entry.Info()
 		if err != nil {
-			return fmt.Sprintf("read entry info failed: %v", err)
+			return "", fmt.Errorf("read entry info failed: %v", err)
 
 		}
 
@@ -89,11 +95,11 @@ func (t *ListDirTool) execute(
 	}
 
 	if len(names) == 0 {
-		return "directory is empty"
+		return "", fmt.Errorf("directory is empty")
 
 	}
 
-	return strings.Join(names, "\n")
+	return strings.Join(names, "\n"), nil
 }
 
 type ReadFileTool struct{}
@@ -104,6 +110,10 @@ type ReadFileArgs struct {
 
 func (t *ReadFileTool) Name() string {
 	return "read_file"
+}
+
+func (t *ReadFileTool) Timeout() time.Duration {
+	return time.Second * 5
 }
 
 func (t *ReadFileTool) Desc() string {
@@ -132,27 +142,27 @@ func (t *ReadFileTool) Definition() *llm.Tool {
 
 // TODO: 封装解析参数操作
 // TODO: 空返回在外部统一处理, 空返回导致 deepseek api 报错
-func (t *ReadFileTool) execute(s *Session, sessionMu *sync.RWMutex, arg string) string {
+func (t *ReadFileTool) execute(s *Session, sessionMu *sync.RWMutex, arg string) (string, error) {
 	var args ReadFileArgs
 	if err := json.Unmarshal([]byte(arg), &args); err != nil {
-		return fmt.Sprintf("invalid arguments: %v", err)
+		return "", fmt.Errorf("invalid arguments: %v", err)
 	}
 
 	path := strings.TrimSpace(args.Path)
 	if path == "" {
-		return "path is required"
+		return "", fmt.Errorf("path is required")
 	}
 
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return fmt.Sprintf("error: %v", err)
+		return "", fmt.Errorf("error: %v", err)
 	}
 
 	res := string(data)
 	if res == "" {
 		res = "<empty file>"
 	}
-	return res
+	return res, nil
 }
 
 
@@ -164,6 +174,10 @@ func (t *ReadMemoryTool) Name() string {
 
 func (t *ReadMemoryTool) Desc() string {
 	return "Read the memory from disk to update context"
+}
+
+func (t *ReadMemoryTool) Timeout() time.Duration {
+	return time.Second * 5
 }
 
 func (t *ReadMemoryTool) Definition() *llm.Tool {

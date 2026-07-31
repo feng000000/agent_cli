@@ -1,12 +1,12 @@
-package tool
+package toolimpl
 
 import "encoding/json"
 import "fmt"
-import "sync"
 import "os"
 import "strings"
 import "time"
 
+import "myagent/internal/tool"
 import "myagent/pkg/llm"
 
 type ListDirTool struct{}
@@ -48,9 +48,8 @@ func (t *ListDirTool) Definition() *llm.Tool {
 	}
 }
 
-func (t *ListDirTool) execute(
-	s *Session,
-	sessionMu *sync.RWMutex,
+func (t *ListDirTool) ExecuteImpl(
+	tc *tool.ToolContext,
 	arg string,
 ) (string, error) {
 	var args listDirArgs
@@ -142,7 +141,10 @@ func (t *ReadFileTool) Definition() *llm.Tool {
 
 // TODO: 封装解析参数操作
 // TODO: 空返回在外部统一处理, 空返回导致 deepseek api 报错
-func (t *ReadFileTool) execute(s *Session, sessionMu *sync.RWMutex, arg string) (string, error) {
+func (t *ReadFileTool) ExecuteImpl(
+	tc *tool.ToolContext,
+	arg string,
+) (string, error) {
 	var args ReadFileArgs
 	if err := json.Unmarshal([]byte(arg), &args); err != nil {
 		return "", fmt.Errorf("invalid arguments: %v", err)
@@ -194,8 +196,11 @@ func (t *ReadMemoryTool) Definition() *llm.Tool {
 	}
 }
 
-func (t *ReadMemoryTool) execute(s *Session, sessionMu *sync.RWMutex, arg string) string {
-	memory_bytes, err := os.ReadFile(s.Meta.Persistence.MemoryPath)
+func (t *ReadMemoryTool) ExecuteImpl(
+	tc *tool.ToolContext,
+	arg string,
+) string {
+	memory_bytes, err := os.ReadFile(tc.Meta.Persistence.MemoryPath)
 	if err != nil {
 		return fmt.Sprintf("<error: %v>", err.Error())
 	}

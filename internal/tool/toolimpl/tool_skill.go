@@ -1,7 +1,9 @@
-package tool
+package toolimpl
 
 import "time"
+import "fmt"
 
+import "myagent/internal/tool"
 import "myagent/pkg/llm"
 
 
@@ -38,9 +40,12 @@ func (t *LoadSkillTool) Definition() *llm.Tool {
 	}
 }
 
-func (t *LoadSkillTool) Execute(arg string) string {
+func (t *LoadSkillTool) ExecuteImpl(
+	tc *tool.ToolContext,
+	arg string,
+) (string, error) {
 	// TODO: implement load_skill
-	return "<Skill:load_skill> not implemented"
+	return "", fmt.Errorf("<Skill:load_skill> not implemented")
 }
 
 
@@ -75,7 +80,10 @@ func (t *ReleaseSkillTool) Definition() *llm.Tool {
 	}
 }
 
-func (t *ReleaseSkillTool) Execute(arg string) string {
+func (t *ReleaseSkillTool) ExecuteImpl(
+	tc *tool.ToolContext,
+	arg string,
+) (string, error) {
 	// TODO: implement release_skill
-	return "<Skill:release_skill> not implemented"
+	return "", fmt.Errorf("<Skill:release_skill> not implemented")
 }

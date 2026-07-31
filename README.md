@@ -10,7 +10,7 @@
 - [ ] 支持图片输入
 - [ ] Skill 渐进式披露/动态卸载
 - [ ] MCP Client
-- [ ] MCP erver
+- [ ] MCP server
 - [ ] TUI
   - [ ] Client command
 - [ ] Sub Agent

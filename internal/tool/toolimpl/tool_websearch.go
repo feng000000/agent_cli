@@ -1,6 +1,8 @@
-package tool
+package toolimpl
 
+import "fmt"
 
+import "myagent/internal/tool"
 import "myagent/pkg/llm"
 
 // TODO: implement WebSearchTool
@@ -22,6 +24,7 @@ func (wt *WebSearchTool) Definition() *llm.Tool {
 
 // Execute 执行工具;
 // arg 为json字符串, 解析结果通过 res channel 传递
-func (wt *WebSearchTool) Execute(args string) {
-
+func (wt *WebSearchTool) ExecuteImpl(tc *tool.ToolContext, arg string) (string, error)  {
+	// TODO: web search
+	return "", fmt.Errorf("webSearch not implemented")
 }

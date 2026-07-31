@@ -1,18 +1,17 @@
 package session
 
 import "os"
-import "context"
-import "time"
 import "path"
+import "time"
 import "encoding/json"
 
-
-import "myagent/pkg/llm"
-import "myagent/pkg/logger"
-
-import "myagent/internal/session/state"
-import "myagent/internal/session/runtime"
+import "myagent/internal/session/userinput"
 import "myagent/internal/session/meta"
+import "myagent/internal/session/response"
+import "myagent/internal/session/runtime"
+import "myagent/internal/session/toolstate"
+import "myagent/pkg/llm"
+
 
 // TODO:  ClientState: client 分开实现
 type ClientState struct {
@@ -26,13 +25,9 @@ const SessionDirBase = "./.myagent/sessions"
 type Session struct {
 	Meta *meta.Meta
 
-	State *state.State
+	ToolState *toolstate.ToolState
 
 	Runtime *runtime.Runtime
-}
-
-func (s *Session) RawLLMClient() llm.LLMClient {
-	return s.Runtime.llmClient
 }
 
 func (s *Session) ForceUpdateContextInfo(
@@ -40,14 +35,11 @@ func (s *Session) ForceUpdateContextInfo(
 	usage *llm.Usage,
 	contextSize int,
 ) {
-	s.State.Messages = messages
-	s.State.Usage = usage
-	s.State.ContextSize = contextSize
+	s.Runtime.Messages = messages
+	s.Runtime.Usage = usage
+	s.Runtime.ContextSize = contextSize
 }
 
-func (s *Session) Emit(resp *AgentResponse) {
-	s.Runtime.outputChan <- resp
-}
 
 // CallLLM 封装请求 LLM 和更新上下文的操作
 func (s *Session) CallLLM(newMsgs ...llm.Message) error {
@@ -60,26 +52,28 @@ func (s *Session) CallLLM(newMsgs ...llm.Message) error {
 			select {
 			case res := <-gotRespCh:
 				if res {
-					s.Emit(
-						&AgentResponse{
-							RespType:      AgentRespTypeMiddleMsg,
+					s.Runtime.Emit(
+						&response.AgentResponse{
+							RespType:      response.AgentRespTypeMiddleMsg,
 							MiddleMessage: "got llm resp",
 						},
 					)
 				} else {
-					s.Emit(
-						&AgentResponse{
-							RespType:      AgentRespTypeMiddleMsg,
+					s.Runtime.Emit(
+						&response.AgentResponse{
+							RespType:      response.AgentRespTypeMiddleMsg,
 							MiddleMessage: "got llm resp failed",
 						},
 					)
 				}
 				return
 			case <-ticker.C:
-				s.Runtime.outputChan <- &AgentResponse{
-					RespType:      AgentRespTypeMiddleMsg,
-					MiddleMessage: "waiting",
-				}
+				s.Runtime.Emit(
+					&response.AgentResponse{
+						RespType:      response.AgentRespTypeMiddleMsg,
+						MiddleMessage: "waiting",
+					},
+				)
 			}
 		}
 	}()
@@ -88,9 +82,12 @@ func (s *Session) CallLLM(newMsgs ...llm.Message) error {
 	if err != nil {
 		return err
 	}
-	msgs := append([]llm.Message{llm.SystemMessage(sysPrompt)}, s.State.Messages...)
+	msgs := append(
+		[]llm.Message{llm.SystemMessage(sysPrompt)},
+		s.Runtime.Messages...,
+	)
 	msgs = append(msgs, newMsgs...)
-	resp, err := s.Runtime.llmClient.Chat(
+	resp, err := s.Runtime.RawLLMClient().Chat(
 		s.Runtime.Ctx,
 		llm.ChatRequest{
 			Messages: msgs,
@@ -107,21 +104,21 @@ func (s *Session) CallLLM(newMsgs ...llm.Message) error {
 	// update response, message, usage, context size
 	s.Runtime.Response = resp
 	if assistantMsg, ok := resp.Message(); ok {
-		s.State.Messages = append(s.State.Messages, assistantMsg)
+		s.Runtime.Messages = append(s.Runtime.Messages, assistantMsg)
 	}
 	if s.Runtime.Response != nil {
-		s.State.Usage.Append(&s.Runtime.Response.Usage)
+		s.Runtime.Usage.Append(&s.Runtime.Response.Usage)
 
-		s.State.ContextSize = s.Runtime.Response.Usage.Prompt +
+		s.Runtime.ContextSize = s.Runtime.Response.Usage.Prompt +
 			s.Runtime.Response.Usage.Completion
 	}
 
 	// send reasoning event
-	lastMsg := s.State.Messages[len(s.State.Messages)-1]
+	lastMsg := s.Runtime.Messages[len(s.Runtime.Messages)-1]
 	if lastMsg.ReasoningContent != "" {
-		s.Emit(
-			&AgentResponse{
-				RespType:      AgentRespTypeMiddleMsg,
+		s.Runtime.Emit(
+			&response.AgentResponse{
+				RespType:      response.AgentRespTypeMiddleMsg,
 				MiddleMessage: lastMsg.ReasoningContent,
 			},
 		)
@@ -133,7 +130,7 @@ func (s *Session) CallLLM(newMsgs ...llm.Message) error {
 func (s *Session) ToolList() []llm.Tool {
 
 	toolList := []llm.Tool{}
-	for _, tool := range s.Meta.ToolMap {
+	for _, tool := range s.ToolState.ToolMap {
 		toolList = append(toolList, *tool.Definition())
 	}
 	return toolList
@@ -148,8 +145,7 @@ func (s *Session) Save() error {
 
 	messagePath := path.Join(sessionDir, "history.jsonl")
 
-	// OPTIMIZE: 改为jsonl 格式, 方便追加写入历史
-	serializeJson(messagePath, s.State.Messages)
+	serializeJson(messagePath, s.Runtime.Messages)
 
 	return nil
 }
@@ -157,122 +153,45 @@ func (s *Session) Save() error {
 // LoadSession 从磁盘 恢复 AgentSession
 func LoadSession(
 	sessionID string,
-	mq *MessageQueue,
-	output chan *AgentResponse,
+	mq *userinput.MessageQueue,
+	output chan *response.AgentResponse,
 ) (*Session, error) {
-	s := &Session{
-		MessageQueue: mq,
-		OutputChan:   output,
-	}
-
 	// TODO: 可从 内存registry -> 磁盘 分级读
 
-	sessionDir := path.Join(SessionDirBase, sessionID)
-	logger.Debugf("load state from %v", sessionDir)
+	metaPath := path.Join(SessionDirBase, sessionID, "meta.json")
+	toolStatePath := path.Join(SessionDirBase, sessionID, "tool_state.json")
+	runtimePath := path.Join(SessionDirBase, sessionID, "runtime.json")
 
-	// load meta
-	meta := newMeta()
-	meta.SessionID = sessionID
-	{
-		metaPath := path.Join(sessionDir, "metadata.json")
-		file, err := os.Open(metaPath)
-		if err != nil {
-			return nil, err
-		}
-		defer file.Close()
+	meta, err := meta.LoadMeta(metaPath)
+	if err != nil {return nil, err}
+	toolState, err := toolstate.LoadToolState(toolStatePath)
+	if err != nil {return nil, err}
+	runtime, err := runtime.LoadRuntime(runtimePath, meta, mq, output)
+	if err != nil {return nil, err}
 
-		decoder := json.NewDecoder(file)
-
-		if err := decoder.Decode(&meta); err != nil {
-			logger.Warnf("load meta from %v failed, New meta", metaPath)
-			meta = newMeta()
-		}
+	s := &Session{
+		Meta: meta,
+		ToolState: toolState,
+		Runtime: runtime,
 	}
-	s.Meta = meta
-
-	runtime := &Runtime{MessageQueue: mq, outputChan: output}
-	llmClient, err := llm.NewDeepSeekClient(
-		llm.DeepSeekConfig{
-			APIKey:  meta.LLM.APIKey,
-			BaseURL: meta.LLM.BaseURL,
-			Model:   meta.LLM.Model,
-		},
-	)
-	if err != nil {
-		return nil, err
-	}
-	ctx, cancel := context.WithCancel(context.Background())
-	runtime.llmClient = llmClient
-	runtime.Ctx = ctx
-	runtime.Cancel = cancel
-
-	s.Runtime = runtime
-
-	state := &State{}
-	// load messages
-	systemPrompt, err := s.SystemPrompt()
-	if err != nil {
-		return nil, err
-	}
-	messages := []llm.Message{llm.SystemMessage(systemPrompt)}
-	func() {
-		messagePath := path.Join(sessionDir, "history.jsonl")
-
-		file, err := os.Open(messagePath)
-		if err != nil {
-			return
-		}
-		defer file.Close()
-
-		decoder := json.NewDecoder(file)
-
-		if err := decoder.Decode(&messages); err != nil {
-			logger.Warnf("load history message failed: %v", err)
-		}
-	}()
-	s.Messages = messages
-
-	logger.Debugf("loaded messages: %v", messages)
-
-	s.Ctx = ctx
-	s.Cancel = cancel
-
 	return s, nil
 }
 
 // NewSession 创建新 session
 func NewSession(
-	mq *MessageQueue,
-	output chan *AgentResponse,
+	mq *userinput.MessageQueue,
+	output chan *response.AgentResponse,
 ) (*Session, error) {
+	meta := meta.NewMeta()
+	toolState := toolstate.NewToolState()
+	runtime, err := runtime.NewRuntime(meta, mq, output)
+	if err != nil {return nil, err}
+
 	s := &Session{
-		MessageQueue: mq,
-		OutputChan:   output,
+		Meta: meta,
+		ToolState: toolState,
+		Runtime: runtime,
 	}
-
-	s.Meta = newMeta()
-
-	llmClient, err := llm.NewDeepSeekClient(
-		llm.DeepSeekConfig{
-			APIKey:  s.Meta.LLM.APIKey,
-			BaseURL: s.Meta.LLM.BaseURL,
-			Model:   s.Meta.LLM.Model,
-		},
-	)
-	if err != nil {
-		return nil, err
-	}
-	s.llmClient = llmClient
-
-	systemPrompt, err := s.SystemPrompt()
-	if err != nil {
-		return nil, err
-	}
-	s.Messages = []llm.Message{llm.SystemMessage(systemPrompt)}
-
-	ctx, cancel := context.WithCancel(context.Background())
-	s.Ctx = ctx
-	s.Cancel = cancel
 
 	return s, nil
 }

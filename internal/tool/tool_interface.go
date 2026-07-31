@@ -6,10 +6,37 @@ import "sync"
 import "time"
 import "context"
 
+import "myagent/internal/session/meta"
+import "myagent/internal/session/response"
+import "myagent/internal/session/runtime"
 import "myagent/pkg/llm"
 import "myagent/pkg/logger"
 
-type ToolMessage struct {
+
+type ToolContext struct {
+	Meta *meta.Meta
+
+	runtime   *runtime.Runtime
+	runtimeMu *sync.RWMutex
+}
+
+// 执行只读的 runtime 操作
+func (tc *ToolContext) RuntimeR(op func(r runtime.Runtime)) {
+	tc.runtimeMu.RLock()
+	defer tc.runtimeMu.RLocker().Unlock()
+
+	op(*tc.runtime)
+}
+
+// 执行 可写的 runtime 操作
+func (tc *ToolContext) RuntimeW(op func(r *runtime.Runtime)) {
+	tc.runtimeMu.RLock()
+	defer tc.runtimeMu.RLocker().Unlock()
+
+	op(tc.runtime)
+}
+
+type ToolResult struct {
 	// Type        string `json:"type"`
 	ToolCallID  string `json:"tool_call_id"`
 	ToolName    string `json:"tool_name"`
@@ -18,16 +45,17 @@ type ToolMessage struct {
 }
 
 func ExecTool(
-	s *Session,
-	sessionMu *sync.RWMutex,
+	m *meta.Meta,
+	r *runtime.Runtime,
+	runtimeMu *sync.RWMutex,
 	toolCallID string,
 	tool Tool,
 	arg string,
-) ToolMessage {
-	ret := make(chan ToolMessage)
+) ToolResult {
+	ret := make(chan ToolResult)
 
 	go func() {
-		toolMsg := ToolMessage{ToolCallID: toolCallID, ToolName: tool.Name()}
+		toolMsg := ToolResult{ToolCallID: toolCallID, ToolName: tool.Name()}
 		defer func() {
 			if r := recover(); r != nil {
 				toolMsg.Result = fmt.Sprintf(
@@ -45,7 +73,10 @@ func ExecTool(
 			return
 		}
 
-		toolRes, err := tool.execute(s, sessionMu, arg)
+		toolRes, err := tool.ExecuteImpl(
+			&ToolContext{Meta: m, runtime: r, runtimeMu: runtimeMu},
+			arg,
+		)
 		if err != nil {
 			toolMsg.Result = fmt.Sprintf(
 				"tool %v exec error: %v", tool.Name(), err.Error(),
@@ -66,33 +97,33 @@ func ExecTool(
 			}
 
 			// 保存失败, 回退到 直接加载到上下文
-			s.OutputChan <- &AgentResponse{
-				RespType: AgentRespTypeMiddleMsg,
-				MiddleMessage: fmt.Sprintf(
-					"save tool result failed, load to context directly: %v",
-					err,
-				),
-			}
+			r.Emit(
+				&response.AgentResponse{
+					RespType: response.AgentRespTypeMiddleMsg,
+					MiddleMessage: fmt.Sprintf(
+						"save tool result failed, load to context directly: %v",
+						err,
+					),
+				},
+			)
 		}
 
 		toolMsg.Result = toolRes
 		ret <- toolMsg
-		return
 	}()
 
-
 	// 超时
-	ctx, cancel := context.WithTimeout(s.Ctx, tool.Timeout())
+	ctx, cancel := context.WithTimeout(r.Ctx, tool.Timeout())
 	defer cancel()
 
 	select {
-	case result:= <- ret:
+	case result := <-ret:
 		return result
 	case <-ctx.Done():
-		return ToolMessage{
+		return ToolResult{
 			ToolCallID: toolCallID,
-			ToolName: tool.Name(),
-			Result: "tool exec timeout",
+			ToolName:   tool.Name(),
+			Result:     "tool exec timeout",
 		}
 	}
 
@@ -111,11 +142,10 @@ type Tool interface {
 	Timeout() time.Duration
 
 	// Execute 执行工具;
-	// s 为当前会话的 session 对象
+	// tc 为工具执行时的上下文
 	// arg 为json字符串, 解析结果通过 res channel 传递
-	execute(s *Session, sessionMu *sync.RWMutex, arg string) (string, error)
+	ExecuteImpl(tc *ToolContext, arg string) (string, error)
 }
-
 
 // saveToolResult 保存 工具输出到临时文件, 并返回文件路径
 func saveToolResult(toolRes string) (string, error) {

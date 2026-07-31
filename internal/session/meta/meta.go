@@ -1,9 +1,9 @@
 package meta
 
+import "os"
+import "encoding/json"
 
 import "github.com/google/uuid"
-
-import "myagent/internal/session/tool"
 
 type AgentModeEnum string
 
@@ -33,29 +33,30 @@ type Meta struct {
 	MaxTokensToCompress int           `json:"max_tokens_to_compress"`
 	Persistence         *Persistence  `json:"persistence"`
 
-	ToolMap  map[string]tool.Tool `json:"-"`
-	SkillMap map[string]string
 }
 
 
-// TODO: LoadMeta
-func LoadMeta() *Meta {
-	return nil
+// LoadMeta 从给定 path 中加载Meta
+func LoadMeta(path string) (*Meta, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+
+	decoder := json.NewDecoder(file)
+
+	meta := &Meta{}
+	if err := decoder.Decode(meta); err != nil {
+		return nil, err
+	}
+	return meta, nil
 }
 
-// TODO: NewMeta
+// NewMeta
 func NewMeta() *Meta {
-	// TODO: default tools
-	listDir := &tool.ListDirTool{}
-	readFile := &tool.ReadFileTool{}
-
 	return &Meta{
 		SessionID: uuid.NewString(),
 		AgentMode: AgentModePlan,
-		ToolMap: map[string]tool.Tool{
-			listDir.Name():  listDir,
-			readFile.Name(): readFile,
-		},
 		Persistence: &Persistence{
 			PersistenceDir: "./.myagent/persistence",
 			MemoryPath:     "./.myagent/persistence/memory.md",

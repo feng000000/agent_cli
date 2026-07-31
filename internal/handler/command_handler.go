@@ -5,7 +5,7 @@ import "fmt"
 import "strings"
 
 import "myagent/internal/command"
-import "myagent/internal/runtime"
+import "myagent/internal/session"
 import "myagent/pkg/logger"
 
 var SkipHandleCommand = fmt.Errorf("skip command")
@@ -26,7 +26,7 @@ func splitCommand(query string) (*cmd, error) {
 
 func HandleClientCommand(
 	ctx context.Context,
-	state *runtime.ClientState,
+	state *session.ClientState,
 	query string,
 ) (string, error) {
 	cmdInput, err := splitCommand(query)
@@ -46,7 +46,7 @@ func HandleClientCommand(
 // HandleAgentCommand 处理Agent运行时的命令
 func HandleAgentCommand(
 	ctx context.Context,
-	state *runtime.Session,
+	state *session.Session,
 	query string,
 ) (string, error) {
 	cmdInput, err := splitCommand(query)

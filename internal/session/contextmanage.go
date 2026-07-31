@@ -70,11 +70,11 @@ type LLMCompressor struct{}
 func (lc *LLMCompressor) Compress(
 	ctx context.Context, s *Session,
 ) error {
-	resp, err := s.RawLLMClient().Chat(
+	resp, err := s.Runtime.RawLLMClient().Chat(
 		ctx,
 		llm.ChatRequest{
 			Messages: append(
-				s.Messages,
+				s.Runtime.Messages,
 				llm.UserMessage(compressSystemPrompt),
 			),
 		},
@@ -87,11 +87,11 @@ func (lc *LLMCompressor) Compress(
 		"<history_context_summary>%s</history_context_summary>",
 		resp.Content(),
 	)
-	s.Messages = []llm.Message{llm.AssistantMessage(summary)}
+	s.Runtime.Messages = []llm.Message{llm.AssistantMessage(summary)}
 
 	s.ForceUpdateContextInfo(
 		[]llm.Message{llm.AssistantMessage(summary)},
-		s.Usage.Append(&resp.Usage),
+		s.Runtime.Usage.Append(&resp.Usage),
 		resp.Usage.Completion,
 	)
 
@@ -106,13 +106,13 @@ type TruncateCompressor struct {
 
 // Compress 直接截断, 只保留 topK 轮消息
 func (tc *TruncateCompressor) Compress(
-	ctx context.Context, state *Session,
+	ctx context.Context, s *Session,
 ) error {
-	sysPrompt, messages := extractSystemPrompt(state.Messages)
+	sysPrompt, messages := extractSystemPrompt(s.Runtime.Messages)
 	_, kept := splitCompressMessages(tc.TopK, messages)
 
 	// system prompt + kept messages
-	state.Messages = append([]llm.Message{*sysPrompt}, kept...)
+	s.Runtime.Messages = append([]llm.Message{*sysPrompt}, kept...)
 
 	return nil
 }
@@ -127,18 +127,18 @@ type HybridCompressor struct {
 // 之前的记录使用大模型压缩
 func (hc *HybridCompressor) Compress(
 	ctx context.Context,
-	state *Session,
+	s *Session,
 ) error {
-	sysPrompt, messages := extractSystemPrompt(state.Messages)
+	sysPrompt, messages := extractSystemPrompt(s.Runtime.Messages)
 	toCompress, kept := splitCompressMessages(hc.TopK, messages)
 
-	state.Messages = toCompress
+	s.Runtime.Messages = toCompress
 
-	(&LLMCompressor{}).Compress(ctx, state)
+	(&LLMCompressor{}).Compress(ctx, s)
 
 	// system prompt + compressed messages + kept messages
-	state.Messages = append(
-		append([]llm.Message{*sysPrompt}, state.Messages...),
+	s.Runtime.Messages = append(
+		append([]llm.Message{*sysPrompt}, s.Runtime.Messages...),
 		kept...,
 	)
 

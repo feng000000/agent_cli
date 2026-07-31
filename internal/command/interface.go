@@ -1,7 +1,7 @@
 package command
 
 import "context"
-import "myagent/internal/runtime"
+import "myagent/internal/session"
 
 // AgentCommand 由Agent处理的命令
 type AgentCommand interface {
@@ -14,7 +14,7 @@ type AgentCommand interface {
 	// Exec 执行命令
 	Exec(
 		ctx context.Context,
-		state *runtime.Session,
+		state *session.Session,
 		args []string,
 	) (string, error)
 }
@@ -30,7 +30,7 @@ type ClientCommand interface {
 	// Exec 执行命令
 	Exec(
 		ctx context.Context,
-		state *runtime.ClientState,
+		state *session.ClientState,
 		args []string,
 	) (string, error)
 }

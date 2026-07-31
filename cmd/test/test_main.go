@@ -5,6 +5,7 @@ import "log"
 import "context"
 import "myagent/pkg/llm"
 import "myagent/internal/tool"
+import "myagent/internal/tool/toolimpl"
 
 type jsonO map[string]any
 
@@ -18,7 +19,7 @@ func main() {
 		llm.UserMessage("./ 目录下有哪些文件"),
 	}
 
-	listDirTool := tool.ListDirTool{}
+	listDirTool := toolimpl.ListDirTool{}
 
 	tools := []llm.Tool{
 		*listDirTool.Definition(),
@@ -72,8 +73,14 @@ func main() {
 
 			// 这里替换成真实工具执行逻辑
 			// toolResult := "杭州当前气温 28°C，多云。"
-			toolResult := listDirTool.Execute(tc.Function.Arguments)
-
+			toolResult, err := listDirTool.ExecuteImpl(&tool.ToolContext{}, tc.Function.Arguments)
+			if err != nil {
+				fmt.Printf("tool exec failed: %v\n", err)
+				messages = append(
+					messages,
+					llm.ToolResultMessage(tc.ID, fmt.Sprintf("tool exec failed: %v", err)),
+				)
+			}
 
 			fmt.Printf("tool result: %v\n", toolResult)
 

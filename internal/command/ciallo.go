@@ -3,7 +3,7 @@ package command
 import "context"
 import "time"
 
-import "myagent/internal/runtime"
+import "myagent/internal/session"
 import "myagent/pkg/logger"
 
 type CialloCommand struct{}
@@ -20,7 +20,7 @@ func (c CialloCommand) Desc() string {
 // Exec 输出mock数据
 func (c CialloCommand) Exec(
 	ctx context.Context,
-	state *runtime.Session,
+	state *session.Session,
 	args []string,
 ) (string, error) {
 	logger.Debugf("Exec ciallo, prepare to sleep\n")

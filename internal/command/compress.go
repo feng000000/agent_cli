@@ -4,7 +4,7 @@ import "context"
 import "fmt"
 import "slices"
 
-import "myagent/internal/runtime"
+import "myagent/internal/session"
 
 type CompressCommand struct{}
 
@@ -20,7 +20,7 @@ func (c CompressCommand) Desc() string {
 // Exec
 func (c CompressCommand) Exec(
 	ctx context.Context,
-	state *runtime.Session,
+	state *session.Session,
 	args []string,
 ) (string, error) {
 	if len(args) > 1 {
@@ -42,11 +42,11 @@ func (c CompressCommand) Exec(
 
 	switch mode {
 	case validMode[0]:
-		(&runtime.TruncateCompressor{}).Compress(ctx, state)
+		(&session.TruncateCompressor{}).Compress(ctx, state)
 	case validMode[1]:
-		(&runtime.LLMCompressor{}).Compress(ctx, state)
+		(&session.LLMCompressor{}).Compress(ctx, state)
 	case validMode[2]:
-		(&runtime.HybridCompressor{}).Compress(ctx, state)
+		(&session.HybridCompressor{}).Compress(ctx, state)
 	}
 
 	return "Context has been compressed", nil

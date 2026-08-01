@@ -1,4 +1,4 @@
-# My Agent
+# Agent CLI
 使用 golang 实现的 agent cli
 
 ## Feature
@@ -18,3 +18,5 @@
 ## TODO
 
 - [ ] Reflection: 生成后自评阶段?
+
+- [ ] 取名

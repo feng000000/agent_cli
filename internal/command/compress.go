@@ -4,7 +4,7 @@ import "context"
 import "fmt"
 import "slices"
 
-import "myagent/internal/session"
+import "agentcli/internal/session"
 
 type CompressCommand struct{}
 

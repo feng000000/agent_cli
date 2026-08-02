@@ -26,10 +26,6 @@ type Policy struct {
 
 	// AllowNetwork 为 true 时不安装网络过滤器。
 	AllowNetwork bool
-
-	// RequireEnforcement 为 true 时,内核不支持所需隔离则返回错误(fail-closed);
-	// 为 false 时尽力施加、不支持就跳过(fail-open)。
-	RequireEnforcement bool
 }
 
 // Apply 在当前 OS 线程上施加 p 描述的约束。
@@ -44,7 +40,7 @@ func Apply(p Policy) error {
 		return fmt.Errorf("confine: filesystem: %w", err)
 	}
 	if !p.AllowNetwork {
-		if err := applyNetwork(p.RequireEnforcement); err != nil {
+		if err := applyNetwork(); err != nil {
 			return fmt.Errorf("confine: network: %w", err)
 		}
 	}

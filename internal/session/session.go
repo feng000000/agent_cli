@@ -5,12 +5,12 @@ import "path"
 import "time"
 import "encoding/json"
 
-import "myagent/internal/session/userinput"
-import "myagent/internal/session/meta"
-import "myagent/internal/session/response"
-import "myagent/internal/session/runtime"
-import "myagent/internal/session/toolstate"
-import "myagent/pkg/llm"
+import "agentcli/internal/session/userinput"
+import "agentcli/internal/session/meta"
+import "agentcli/internal/session/response"
+import "agentcli/internal/session/runtime"
+import "agentcli/internal/session/toolstate"
+import "agentcli/pkg/llm"
 
 
 // TODO:  ClientState: client 分开实现

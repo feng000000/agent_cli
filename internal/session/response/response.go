@@ -1,6 +1,6 @@
 package response
 
-import "myagent/pkg/llm"
+import "agentcli/pkg/llm"
 
 type ResponseTypeEnum string
 

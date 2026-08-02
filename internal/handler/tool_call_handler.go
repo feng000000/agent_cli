@@ -3,11 +3,11 @@ package handler
 import "fmt"
 import "sync"
 
-import "myagent/internal/tool"
-import "myagent/internal/session"
-import "myagent/internal/session/userinput"
-import "myagent/pkg/llm"
-import "myagent/pkg/logger"
+import "agentcli/internal/tool"
+import "agentcli/internal/session"
+import "agentcli/internal/session/userinput"
+import "agentcli/pkg/llm"
+import "agentcli/pkg/logger"
 
 func findToolCallID(id string, toolMsgs []tool.ToolResult) int {
 	for i, msg := range toolMsgs {

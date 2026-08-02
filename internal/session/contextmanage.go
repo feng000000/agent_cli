@@ -8,7 +8,7 @@ import "strings"
 import "text/template"
 import "time"
 
-import "myagent/pkg/llm"
+import "agentcli/pkg/llm"
 
 //go:embed prompts/system_prompt.md
 var systemPromptTemplate string

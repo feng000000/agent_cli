@@ -1,7 +1,7 @@
 package command
 
 import "context"
-import "myagent/internal/session"
+import "agentcli/internal/session"
 
 type StopCommand struct{}
 

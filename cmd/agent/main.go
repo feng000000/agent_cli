@@ -4,9 +4,9 @@ import "log"
 import "os"
 import "flag"
 
-import "myagent/internal/agent"
-import "myagent/internal/config"
-import "myagent/pkg/logger"
+import "agentcli/internal/agent"
+import "agentcli/internal/config"
+import "agentcli/pkg/logger"
 
 
 func main() {

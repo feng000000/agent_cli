@@ -8,9 +8,7 @@ import "golang.org/x/sys/unix"
 // applyNetwork 用 seccomp 禁止外联:在 socket() 上做参数级过滤,
 // 当地址族为 AF_INET / AF_INET6 时返回 EPERM,而放行 AF_UNIX,
 // 从而切断 IPv4/IPv6 网络但不破坏本地 Unix 域套接字通信。
-//
-// requireEnforcement 为 false 时,过滤器加载失败(平台/内核不支持)将被容忍。
-func applyNetwork(requireEnforcement bool) error {
+func applyNetwork() error {
 	filter, err := seccomp.NewFilter(seccomp.ActAllow) // 默认放行,仅对出网 socket 设例外
 	if err != nil {
 		return err
@@ -42,10 +40,7 @@ func applyNetwork(requireEnforcement bool) error {
 	}
 
 	if err := filter.Load(); err != nil {
-		if requireEnforcement {
-			return err
-		}
-		return nil // best-effort:不支持则放行
+		return err
 	}
 	return nil
 }

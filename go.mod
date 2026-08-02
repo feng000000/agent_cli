@@ -1,4 +1,4 @@
-module myagent
+module agentcli
 
 go 1.26.3
 

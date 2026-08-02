@@ -3,8 +3,8 @@ package command
 import "context"
 import "time"
 
-import "myagent/internal/session"
-import "myagent/pkg/logger"
+import "agentcli/internal/session"
+import "agentcli/pkg/logger"
 
 type CialloCommand struct{}
 

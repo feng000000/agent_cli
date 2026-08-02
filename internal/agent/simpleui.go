@@ -6,11 +6,11 @@ import "errors"
 import "fmt"
 import "io"
 
-import "myagent/internal/handler"
-import "myagent/internal/session"
-import "myagent/internal/session/userinput"
-import "myagent/internal/session/response"
-import "myagent/pkg/logger"
+import "agentcli/internal/handler"
+import "agentcli/internal/session"
+import "agentcli/internal/session/userinput"
+import "agentcli/internal/session/response"
+import "agentcli/pkg/logger"
 
 
 func StartSimpleUI(

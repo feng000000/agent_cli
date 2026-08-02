@@ -4,9 +4,9 @@ import "context"
 import "fmt"
 import "strings"
 
-import "myagent/internal/command"
-import "myagent/internal/session"
-import "myagent/pkg/logger"
+import "agentcli/internal/command"
+import "agentcli/internal/session"
+import "agentcli/pkg/logger"
 
 var SkipHandleCommand = fmt.Errorf("skip command")
 

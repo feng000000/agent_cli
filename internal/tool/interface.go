@@ -6,11 +6,11 @@ import "sync"
 import "time"
 import "context"
 
-import "myagent/internal/session/meta"
-import "myagent/internal/session/response"
-import "myagent/internal/session/runtime"
-import "myagent/pkg/llm"
-import "myagent/pkg/logger"
+import "agentcli/internal/session/meta"
+import "agentcli/internal/session/response"
+import "agentcli/internal/session/runtime"
+import "agentcli/pkg/llm"
+import "agentcli/pkg/logger"
 
 
 type ToolContext struct {
@@ -43,6 +43,13 @@ type ToolResult struct {
 	Result      string `json:"result"`
 	NeedConfirm bool   `json:"need_confirm"`
 }
+
+type ApprovalPolicyEnum string
+
+const (
+	ApprovalPolicyNever = "never"
+	ApprovalPolicyAlways = "always"
+)
 
 func ExecTool(
 	m *meta.Meta,
@@ -139,6 +146,7 @@ type Tool interface {
 	// Definition 为工具定义, 用于作为请求LLM 时的参数
 	Definition() *llm.Tool
 
+	// Timeout 定义Tool 的默认 timeout
 	Timeout() time.Duration
 
 	// Execute 执行工具;

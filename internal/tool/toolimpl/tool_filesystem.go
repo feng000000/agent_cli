@@ -6,8 +6,8 @@ import "os"
 import "strings"
 import "time"
 
-import "myagent/internal/tool"
-import "myagent/pkg/llm"
+import "agentcli/internal/tool"
+import "agentcli/pkg/llm"
 
 type ListDirTool struct{}
 

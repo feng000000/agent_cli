@@ -2,8 +2,8 @@ package toolimpl
 
 import "fmt"
 
-import "myagent/internal/tool"
-import "myagent/pkg/llm"
+import "agentcli/internal/tool"
+import "agentcli/pkg/llm"
 
 // TODO: implement WebSearchTool
 type WebSearchTool struct {}

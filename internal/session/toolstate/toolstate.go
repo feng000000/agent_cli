@@ -3,8 +3,8 @@ package toolstate
 import "os"
 import "encoding/json"
 
-import "myagent/internal/tool"
-import "myagent/internal/tool/toolimpl"
+import "agentcli/internal/tool"
+import "agentcli/internal/tool/toolimpl"
 
 
 type ToolState struct {

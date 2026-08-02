@@ -4,10 +4,10 @@ import "os"
 import "encoding/json"
 import "context"
 
-import "myagent/internal/session/userinput"
-import "myagent/internal/session/response"
-import "myagent/internal/session/meta"
-import "myagent/pkg/llm"
+import "agentcli/internal/session/userinput"
+import "agentcli/internal/session/response"
+import "agentcli/internal/session/meta"
+import "agentcli/pkg/llm"
 
 // NewRuntime
 func NewRuntime(

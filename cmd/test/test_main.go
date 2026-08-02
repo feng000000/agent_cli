@@ -3,9 +3,9 @@ package main
 import "fmt"
 import "log"
 import "context"
-import "myagent/pkg/llm"
-import "myagent/internal/tool"
-import "myagent/internal/tool/toolimpl"
+import "agentcli/pkg/llm"
+import "agentcli/internal/tool"
+import "agentcli/internal/tool/toolimpl"
 
 type jsonO map[string]any
 

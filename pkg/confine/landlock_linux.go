@@ -24,8 +24,9 @@ func applyFilesystem(p Policy) error {
 	rules = append(rules, landlock.RWFiles("/dev/null").IgnoreIfMissing())
 
 	cfg := landlock.V5 // 请求最新 ABI;库会向下兼容到内核实际支持的版本
-	if !p.RequireEnforcement {
-		cfg = cfg.BestEffort() // 内核过老时降级而非报错
-	}
+	cfg = cfg.BestEffort() // 内核过老时降级而非报错
+	// if !p.RequireEnforcement {
+	// 	cfg = cfg.BestEffort() // 内核过老时降级而非报错
+	// }
 	return cfg.RestrictPaths(rules...)
 }

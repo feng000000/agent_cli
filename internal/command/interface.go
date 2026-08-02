@@ -1,7 +1,7 @@
 package command
 
 import "context"
-import "myagent/internal/session"
+import "agentcli/internal/session"
 
 // AgentCommand 由Agent处理的命令
 type AgentCommand interface {

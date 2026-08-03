@@ -136,7 +136,7 @@ func main() {
 }
 
 
-// TODO: Executor 做一个长期程序, 弄一个 进程池子, 使用 socket / rpc /http 接收 json, 哪个方便用哪个
+// TODO: Executor cmd 一次性执行, 并附加限制, 外层以 mcp server 暴露
 
 func runTool(t tool.Tool) (string, error) {
 	// 可以读取大部分文件。

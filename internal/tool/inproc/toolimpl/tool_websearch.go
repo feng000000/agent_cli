@@ -24,7 +24,7 @@ func (wt *WebSearchTool) Definition() *llm.Tool {
 
 // Execute 执行工具;
 // arg 为json字符串, 解析结果通过 res channel 传递
-func (wt *WebSearchTool) ExecuteImpl(tc *tool.ToolContext, arg string) (string, error)  {
+func (wt *WebSearchTool) ExecuteImpl(tc *tool.InternalToolContext, arg string) (string, error)  {
 	// TODO: web search
 	return "", fmt.Errorf("webSearch not implemented")
 }

@@ -41,7 +41,7 @@ func (t *LoadSkillTool) Definition() *llm.Tool {
 }
 
 func (t *LoadSkillTool) ExecuteImpl(
-	tc *tool.ToolContext,
+	tc *tool.InternalToolContext,
 	arg string,
 ) (string, error) {
 	// TODO: implement load_skill
@@ -81,7 +81,7 @@ func (t *ReleaseSkillTool) Definition() *llm.Tool {
 }
 
 func (t *ReleaseSkillTool) ExecuteImpl(
-	tc *tool.ToolContext,
+	tc *tool.InternalToolContext,
 	arg string,
 ) (string, error) {
 	// TODO: implement release_skill

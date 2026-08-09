@@ -13,7 +13,7 @@ import "agentcli/pkg/llm"
 import "agentcli/pkg/logger"
 
 
-type ToolContext struct {
+type InternalToolContext struct {
 	Meta *meta.Meta
 
 	runtime   *runtime.Runtime
@@ -21,7 +21,7 @@ type ToolContext struct {
 }
 
 // 执行只读的 runtime 操作
-func (tc *ToolContext) RuntimeR(op func(r runtime.Runtime)) {
+func (tc *InternalToolContext) RuntimeR(op func(r runtime.Runtime)) {
 	tc.runtimeMu.RLock()
 	defer tc.runtimeMu.RLocker().Unlock()
 
@@ -29,7 +29,7 @@ func (tc *ToolContext) RuntimeR(op func(r runtime.Runtime)) {
 }
 
 // 执行 可写的 runtime 操作
-func (tc *ToolContext) RuntimeW(op func(r *runtime.Runtime)) {
+func (tc *InternalToolContext) RuntimeW(op func(r *runtime.Runtime)) {
 	tc.runtimeMu.RLock()
 	defer tc.runtimeMu.RLocker().Unlock()
 
@@ -51,18 +51,23 @@ const (
 	ApprovalPolicyAlways = "always"
 )
 
-func ExecTool(
+func ExecInternalTool(
 	m *meta.Meta,
 	r *runtime.Runtime,
 	runtimeMu *sync.RWMutex,
 	toolCallID string,
-	tool Tool,
+	tool InternalTool,
 	arg string,
 ) ToolResult {
 	ret := make(chan ToolResult)
 
 	go func() {
-		toolMsg := ToolResult{ToolCallID: toolCallID, ToolName: tool.Name()}
+		toolMsg := ToolResult{
+			ToolCallID: toolCallID,
+			ToolName: tool.Name(),
+			// 内部工具不需要确认
+			NeedConfirm: false,
+		}
 		defer func() {
 			if r := recover(); r != nil {
 				toolMsg.Result = fmt.Sprintf(
@@ -72,16 +77,8 @@ func ExecTool(
 			}
 		}()
 
-		// TODO: check if tool need Confirm
-		NeedConfirm := false
-		if NeedConfirm {
-			toolMsg.NeedConfirm = true
-			ret <- toolMsg
-			return
-		}
-
 		toolRes, err := tool.ExecuteImpl(
-			&ToolContext{Meta: m, runtime: r, runtimeMu: runtimeMu},
+			&InternalToolContext{Meta: m, runtime: r, runtimeMu: runtimeMu},
 			arg,
 		)
 		if err != nil {
@@ -136,7 +133,7 @@ func ExecTool(
 
 }
 
-type Tool interface {
+type InternalTool interface {
 	// Name 标识工具名称
 	Name() string
 
@@ -152,7 +149,7 @@ type Tool interface {
 	// Execute 执行工具;
 	// tc 为工具执行时的上下文
 	// arg 为json字符串, 解析结果通过 res channel 传递
-	ExecuteImpl(tc *ToolContext, arg string) (string, error)
+	ExecuteImpl(tc *InternalToolContext, arg string) (string, error)
 }
 
 // saveToolResult 保存 工具输出到临时文件, 并返回文件路径

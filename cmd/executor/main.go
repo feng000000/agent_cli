@@ -57,7 +57,7 @@ func Output(code RetCodeEnum, content any) {
 }
 
 func main() {
-	tools := []tool.Tool{
+	tools := []tool.InternalTool{
 		&toolimpl.ListDirTool{},
 		&toolimpl.ReadFileTool{},
 		&toolimpl.LoadSkillTool{},
@@ -97,7 +97,7 @@ func main() {
 		Output(RetCodeInvalidParam, "tool name or workdir cannot be empty")
 	}
 
-	var targetTool tool.Tool
+	var targetTool tool.InternalTool
 	for _, tool := range tools {
 		if *toolName == tool.Name() {
 			targetTool = tool
@@ -138,10 +138,10 @@ func main() {
 
 // TODO: Executor cmd 一次性执行, 并附加限制, 外层以 mcp server 暴露
 
-func runTool(t tool.Tool) (string, error) {
+func runTool(t tool.InternalTool) (string, error) {
 	// 可以读取大部分文件。
 	// 只能写入 WritableDirs。
 	// 默认无法创建外联 socket。
 
-	res := tool.ExecTool(s.Meta, s.Runtime, runtimeMu, tc.ID, t, tc.Function.Arguments)
+	res := tool.ExecInternalTool(s.Meta, s.Runtime, runtimeMu, tc.ID, t, tc.Function.Arguments)
 }

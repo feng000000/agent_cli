@@ -9,17 +9,17 @@ import "agentcli/internal/tool/toolimpl"
 
 type ToolState struct {
 
-	ToolMap  map[string]tool.Tool `json:"-"`
+	ToolMap  map[string]tool.InternalTool `json:"-"`
 	// 已执行的 tool 结果
 	ToolResults []tool.ToolResult `json:"tool_results"`
 }
 
 
-func defaultToolMap() map[string]tool.Tool {
+func defaultToolMap() map[string]tool.InternalTool {
 	listDir := &toolimpl.ListDirTool{}
 	readFile := &toolimpl.ReadFileTool{}
 
-	return map[string]tool.Tool{
+	return map[string]tool.InternalTool{
 		listDir.Name():  listDir,
 		readFile.Name(): readFile,
 	}

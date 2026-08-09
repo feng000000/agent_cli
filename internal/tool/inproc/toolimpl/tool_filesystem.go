@@ -49,7 +49,7 @@ func (t *ListDirTool) Definition() *llm.Tool {
 }
 
 func (t *ListDirTool) ExecuteImpl(
-	tc *tool.ToolContext,
+	tc *tool.InternalToolContext,
 	arg string,
 ) (string, error) {
 	var args listDirArgs
@@ -142,7 +142,7 @@ func (t *ReadFileTool) Definition() *llm.Tool {
 // TODO: 封装解析参数操作
 // TODO: 空返回在外部统一处理, 空返回导致 deepseek api 报错
 func (t *ReadFileTool) ExecuteImpl(
-	tc *tool.ToolContext,
+	tc *tool.InternalToolContext,
 	arg string,
 ) (string, error) {
 	var args ReadFileArgs
@@ -197,7 +197,7 @@ func (t *ReadMemoryTool) Definition() *llm.Tool {
 }
 
 func (t *ReadMemoryTool) ExecuteImpl(
-	tc *tool.ToolContext,
+	tc *tool.InternalToolContext,
 	arg string,
 ) string {
 	memory_bytes, err := os.ReadFile(tc.Meta.Persistence.MemoryPath)

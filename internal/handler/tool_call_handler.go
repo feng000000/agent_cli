@@ -59,7 +59,7 @@ func HandleToolCall(s *session.Session) error {
 					}
 				}
 			}()
-			res := tool.ExecTool(s.Meta, s.Runtime, runtimeMu, tc.ID, t, tc.Function.Arguments)
+			res := tool.ExecInternalTool(s.Meta, s.Runtime, runtimeMu, tc.ID, t, tc.Function.Arguments)
 			resCh <- res
 		}()
 

@@ -1,0 +1,101 @@
+schema: spec-driven
+
+# Project context (optional)
+# This is shown to AI when creating artifacts.
+# Add your tech stack, conventions, style guides, domain knowledge, etc.
+# Example:
+#   context: |
+#     Tech stack: TypeScript, React, Node.js
+#     We use conventional commits
+#     Domain: e-commerce platform
+
+# Per-artifact rules (optional)
+# Add custom rules for specific artifacts.
+# Example:
+#   rules:
+#     proposal:
+#       - Keep proposals under 500 words
+#       - Always include a "Non-goals" section
+#     tasks:
+#       - Break tasks into chunks of max 2 hours
+#       schema: spec-driven
+language: zh-CN
+
+context: |
+  所有 OpenSpec 文档必须使用简体中文编写, 并保持精炼。
+  一个 change 只处理一个独立需求、问题修复或架构调整。
+  change 名称使用小写 kebab-case；如需日期序号，使用 YYYYMMDD-NNN-verb-target。
+  纯重构、工具或文档变更如果没有行为变化，应通过 .openspec.yaml 设置 skip_specs: true。
+  不重复描述 OpenSpec 内置目录结构和 artifact 格式。
+  技术栈
+  后端：Golang
+  ORM: gorm(https://gorm.io/docs/)
+  前端：React + TypeScript + Vite
+  数据库：PostgreSQL
+  缓存：Redis
+  基础设施：Docker
+  CI/CD：GitHub Actions
+  架构原则
+  - WEB API 保持无状态（Stateless）, 传递 id 来维持状态而不是保持 session 或 websocket, 除非讨论后明确指定实现方式
+  - 避免无意义的抽象, 如果没有多个子类则没有必要使用继承; 只有在业务足够复杂时才使用 protocol, base class 来解耦
+  - 进行模块设计时优先考虑能否复用已有模块，如果没有那么在设计新模块时要考虑设计模式和未来的复用性
+  - 通用功能优先设计为独立模块（如认证、日志、错误处理、通用响应等），通常放在 core 或 common 模块
+  开发行为准则
+  - 代码修改后需使用 LSP(gopl) 验证直至无误
+  - 不顺手重构无关模块；发现问题可记录但不在同变更处理
+  - 所有 API 必须遵循 REST 风格
+  - 新增 API 默认返回统一 JSON 结构
+    {
+      "code": 数字状态码,
+      "msg": "ok",
+      "data": {}
+    }
+  - API 必须提供 OpenAPI 文档
+  - API 路径使用 /api/v<x>/ 版本控制, <x>代表当前接口版本
+  代码质量规范
+  - 所有导出函数必须包含函数文档, 且符合golang函数文档规范
+  - 较为重要的非导出函数/逻辑较多的函数 也应添加函数文档
+  - 所有关键业务操作必须记录日志
+  - 错误必须记录 error log
+  - API 请求必须记录 request id
+  数据库设计规范
+  - 数据库表定义 使用 gorm(https://gorm.io/docs/)
+  - 数据库迁移使用 gorm + atlas(https://atlasgo.io/docs)
+  - 使用规范化设计避免数据冗余
+  - 所有表必须包含 created_at 字段
+  - 有更新的表必须包含 updated_at 字段
+  - 使用 UUID 作为主键
+  - 必须设计合理的索引以优化查询性能
+  - 不要使用 外键, 仅存储逻辑外键, 在应用层添加判断逻辑; 外键策略优先沿用现有模型风格，新增变更必须说明取舍与一致性策略
+
+
+
+rules:
+  proposal:
+    - 保持精炼，重点说明变更原因、能力变化、范围与非目标
+    - 列出关键假设以及会影响范围或验收标准的歧义取舍
+    - 标明实际受影响的模块、系统或交付物
+    - 涉及时，说明兼容性、配置、安全、依赖和数据迁移影响；不涉及的类别无需创建空章节
+
+  specs:
+    - 一个 spec 只描述一个清晰的 capability
+    - Requirement 必须描述可观察、可测试的系统行为，不描述内部实现
+    - 场景使用 WHEN/THEN；仅在前置状态影响行为时使用 GIVEN
+    - 为适用的错误、边界或取消条件提供场景，不得为了满足数量要求虚构失败场景
+    - 修改现有能力时必须沿用主 spec 的完整 capability 路径
+    - MODIFIED Requirement 必须包含修改后的完整内容及全部场景
+
+  design:
+    - 仅在存在重要技术决策、跨模块影响、架构变化、安全或性能风险、迁移复杂度时编写完整设计
+    - 说明关键决策、选择理由、主要替代方案和风险缓解措施
+    - 存在多个相互影响的 capability 时，说明边界、依赖、实施顺序及依赖失败时的处理方式
+    - 涉及迁移时说明执行、兼容和回滚方案
+    - 不适用的章节无需创建
+
+  tasks:
+    - 每个任务必须边界明确、可独立完成，并使用可追踪的复选框格式
+    - 每个实现任务应引用对应 capability 或 Requirement
+    - 每个任务必须包含具体的自动化验证命令或人工验收路径
+    - 必须覆盖必要的测试；涉及公共行为、接口、配置或运维变化时包含文档任务
+    - 按实现依赖顺序组织，避免一个任务同时修改多个无关模块
+    - 涉及数据迁移时包含迁移执行、兼容和回滚验证

@@ -2,11 +2,11 @@ package toolimpl
 
 import "fmt"
 
-import "agentcli/internal/tool"
+import "agentcli/internal/tool/inproc"
 import "agentcli/pkg/llm"
 
 // TODO: implement WebSearchTool
-type WebSearchTool struct {}
+type WebSearchTool struct{}
 
 func (wt *WebSearchTool) Name() string {
 	return "web-search"
@@ -24,7 +24,10 @@ func (wt *WebSearchTool) Definition() *llm.Tool {
 
 // Execute 执行工具;
 // arg 为json字符串, 解析结果通过 res channel 传递
-func (wt *WebSearchTool) ExecuteImpl(tc *tool.InternalToolContext, arg string) (string, error)  {
+func (wt *WebSearchTool) ExecuteImpl(
+	tc *inproc.InternalToolContext,
+	arg string,
+) (string, error) {
 	// TODO: web search
 	return "", fmt.Errorf("webSearch not implemented")
 }

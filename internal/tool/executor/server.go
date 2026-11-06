@@ -41,7 +41,7 @@ func (ts *ToolServer) serveUnix(socketPath string) error {
 	}
 
 	server := &http.Server{
-		Handler: newToolHandler(),
+		Handler: ts.newToolHandler(),
 	}
 
 	return server.Serve(listener)
@@ -89,9 +89,7 @@ func (ts *ToolServer) executeHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// TODO: execute Tool
-	resp := Response{
-		Content: "executed: "
-	}
+	resp := Response{}
 
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(resp); err != nil {

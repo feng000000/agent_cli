@@ -1,4 +1,4 @@
-package tool
+package inproc
 
 import "fmt"
 import "os"

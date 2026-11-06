@@ -136,7 +136,6 @@ func main() {
 }
 
 
-// TODO: Executor cmd 一次性执行, 并附加限制, 外层以 mcp server 暴露
 
 func runTool(t tool.InternalTool) (string, error) {
 	// 可以读取大部分文件。

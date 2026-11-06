@@ -23,3 +23,50 @@
   - [ ] Client command
 - [ ] Sub Agent
 - [ ] 命名
+
+
+### draft
+
+```mermaid
+graph LR
+
+tool --> inproc[inproc tool]
+tool --> outproc[outproc tool]
+```
+
+
+```mermaid
+sequenceDiagram
+
+participant query
+participant core
+participant tool as tool executor
+participant LLM
+
+query ->> core: first query
+core ->> LLM:
+
+LLM ->> core: tool call
+
+alt TOOL CALL (outproc)
+  core ->> tool: inproc tool
+  note right of tool: 进程内执行,可以修改 runtime. 没有任何风险的 tool
+
+  tool ->> core: 修改 runtime, 返回 result
+  core ->> LLM: tool result
+end
+
+alt TOOL CALL (outproc)
+  core ->> tool: outproc tool
+  note right of tool: 单独进程执行, 添加 seccomp 和 landlock 限制
+
+
+  core ->> tool: outproc tool (权限提升)
+  note right of tool: 命令经过用户判断(除非是 --dangerously)
+
+  core ->> LLM: tool result
+end
+
+
+
+```

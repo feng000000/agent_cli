@@ -3,7 +3,7 @@ package toolimpl
 import "time"
 import "fmt"
 
-import "agentcli/internal/tool"
+import "agentcli/internal/tool/inproc"
 import "agentcli/pkg/llm"
 
 
@@ -41,7 +41,7 @@ func (t *LoadSkillTool) Definition() *llm.Tool {
 }
 
 func (t *LoadSkillTool) ExecuteImpl(
-	tc *tool.InternalToolContext,
+	tc *inproc.InternalToolContext,
 	arg string,
 ) (string, error) {
 	// TODO: implement load_skill
@@ -81,7 +81,7 @@ func (t *ReleaseSkillTool) Definition() *llm.Tool {
 }
 
 func (t *ReleaseSkillTool) ExecuteImpl(
-	tc *tool.InternalToolContext,
+	tc *inproc.InternalToolContext,
 	arg string,
 ) (string, error) {
 	// TODO: implement release_skill
